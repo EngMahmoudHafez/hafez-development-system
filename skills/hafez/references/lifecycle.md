@@ -1,4 +1,4 @@
-# Lifecycle model
+# Hafez lifecycle model
 
 ## Workflow state
 

@@ -1,7 +1,7 @@
 {
   "name": "hafez-development-system",
-  "version": "0.1.0",
-  "description": "A stack-aware project lifecycle, recovery, verification, and delegation system.",
+  "version": "0.1.1",
+  "description": "A skills-first project operating system for delivery, recovery, verification, and delegation.",
   "author": {
     "name": "Mahmoud Hafez"
   },
@@ -10,11 +10,11 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "Hafez Development System",
-    "shortDescription": "Inspect, resume, build, verify, and hand off projects.",
-    "longDescription": "Run a project from discovery through release, or safely adopt and resume an existing codebase with evidence-backed state and provider-neutral delegation.",
+    "shortDescription": "Take projects to their next verified milestone.",
+    "longDescription": "Use natural language to start, understand, resume, build, verify, delegate, and hand off software projects with durable repository state.",
     "developerName": "Mahmoud Hafez",
     "category": "Productivity",
     "capabilities": ["Read", "Write"],
-    "defaultPrompt": "Inspect this project, identify its current stage, and recommend the next safe action."
+    "defaultPrompt": "Use Hafez to inspect or resume this project and continue to the next verified milestone, pausing only for a genuine decision."
   }
 }

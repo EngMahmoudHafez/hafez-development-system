@@ -1,0 +1,4 @@
+interface:
+  display_name: "Hafez — Run This Project"
+  short_description: "Start, recover, and finish software projects"
+  default_prompt: "Use $hafez to inspect or resume this project and continue to the next verified milestone, pausing only for a genuine decision."

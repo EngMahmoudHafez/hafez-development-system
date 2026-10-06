@@ -1,4 +1,0 @@
-interface:
-  display_name: "Hafez Orchestrate"
-  short_description: "Run or recover a complete project lifecycle"
-  default_prompt: "Use $hafez-orchestrate to determine this project's phase and next safe action."

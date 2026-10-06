@@ -1,12 +1,14 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "hafez-development-system",
-  "version": "0.1.0",
-  "description": "A provider-neutral project lifecycle, recovery, verification, and delegation system.",
+  "version": "0.1.1",
+  "description": "A skills-first project operating system that inspects, resumes, builds, verifies, and hands off software work.",
   "author": {
     "name": "Mahmoud Hafez",
     "url": "https://github.com/EngMahmoudHafez"
   },
+  "homepage": "https://github.com/EngMahmoudHafez/hafez-development-system",
+  "repository": "https://github.com/EngMahmoudHafez/hafez-development-system",
   "license": "MIT",
   "keywords": ["project-lifecycle", "skills", "delegation", "orchestration"],
   "skills": "./skills/",
@@ -15,15 +17,15 @@
       "hooks": "./hooks/hooks.json",
       "interface": {
         "displayName": "Hafez Development System",
-        "shortDescription": "Inspect, resume, build, verify, and hand off projects.",
-        "longDescription": "Run a project from discovery through release, or safely adopt and resume an existing codebase with evidence-backed state and provider-neutral delegation.",
+        "shortDescription": "Take a project from its current state to a verified milestone.",
+        "longDescription": "Use natural language to start a new project or safely understand and continue an existing codebase. Hafez routes work through focused skills for inspection, durable state, vertical slices, architecture, verification, delegation, and handoff.",
         "developerName": "Mahmoud Hafez",
         "category": "Productivity",
         "capabilities": ["Read", "Write"],
         "defaultPrompt": [
-          "Inspect this project and recommend the next safe action.",
-          "Resume the active slice from its latest evidence.",
-          "Plan and delegate the next vertical slice."
+          "Use Hafez to understand this project and continue to the next verified milestone.",
+          "Resume the active slice and keep working until a genuine decision is required.",
+          "Plan and deliver the next Laravel and Nuxt vertical slice."
         ],
         "brandColor": "#0F766E"
       }

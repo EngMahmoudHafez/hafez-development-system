@@ -126,7 +126,7 @@ export async function main(argv) {
     return;
   }
   if (command === 'version' || command === '--version') {
-    console.log('0.1.0');
+    console.log('0.1.1');
     return;
   }
 
