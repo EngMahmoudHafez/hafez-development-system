@@ -19,8 +19,8 @@ const help = `Hafez Development System
 
 Usage:
   hafez inspect [path] [--json]
-  hafez init [path] [--apply] [--json]
-  hafez adopt [path] [--apply] [--json]
+  hafez init [path] [--apply] [--architecture-profile <profile>] [--json]
+  hafez adopt [path] [--apply] [--architecture-profile <profile>] [--json]
   hafez resume [path] [--json]
   hafez run [path] [--max-steps N] [--execute] [--json]
   hafez plan <S-ID> <title> [--path <path>] [--json]
@@ -98,11 +98,13 @@ async function runProjectCommand(command, targetPath, flags) {
   if (command === 'inspect') return inspectProject(targetPath);
   if (command === 'adopt' || command === 'init') {
     const report = await inspectProject(targetPath);
-    if (flags.apply) return adoptProject(report);
+    if (flags.apply) return adoptProject(report, { architectureProfile: flags['architecture-profile'] ?? null });
     return {
       root: report.root,
       apply: false,
       inferredFocus: report.inference.currentFocus,
+      architectureProfile: flags['architecture-profile'] ?? null,
+      recommendedArchitectureProfile: report.stacks.includes('laravel') ? 'laravel-domain-slices-v1' : null,
       allowedWrites: ['.hafez/', 'docs/hafez/', 'AGENTS.md when missing'],
       next: 'Review this preview, then rerun with --apply.',
     };
