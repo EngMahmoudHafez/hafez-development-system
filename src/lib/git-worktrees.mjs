@@ -16,10 +16,15 @@ function nulSeparated(output) {
   return output.split('\0').filter(Boolean);
 }
 
+function canonicalPath(filePath) {
+  const resolvedPath = realpathSync.native(filePath);
+  return process.platform === 'win32' ? resolvedPath.toLowerCase() : resolvedPath;
+}
+
 export function gitRepositoryState(root) {
   const repositoryRoot = runText('git', ['rev-parse', '--show-toplevel'], root);
   if (!repositoryRoot) throw new Error('Write-capable delegation requires a Git repository.');
-  if (path.relative(realpathSync(repositoryRoot), realpathSync(root)) !== '') {
+  if (canonicalPath(repositoryRoot) !== canonicalPath(root)) {
     throw new Error('Write-capable delegation must be prepared from the Git repository root.');
   }
 

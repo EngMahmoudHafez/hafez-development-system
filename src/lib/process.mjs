@@ -6,7 +6,8 @@ function windowsCommandPath(command) {
   if (path.isAbsolute(command)) return existsSync(command) ? command : null;
   const lookup = spawnSync('where', [command], { encoding: 'utf8' });
   if (lookup.status !== 0) return null;
-  return lookup.stdout.split(/\r?\n/).find(Boolean) ?? null;
+  const commandPaths = lookup.stdout.split(/\r?\n/).filter(Boolean);
+  return commandPaths.find((commandPath) => /\.(?:exe|com|cmd|bat)$/i.test(commandPath)) ?? commandPaths[0] ?? null;
 }
 
 export function commandExists(command) {
