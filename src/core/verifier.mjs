@@ -5,6 +5,30 @@ import { loadProjectState, saveState } from './state.mjs';
 import { inspectGit } from '../lib/git.mjs';
 import { auditArchitecture } from './architecture.mjs';
 
+const MAX_CAPTURED_OUTPUT_CHARS = 8 * 1024;
+
+function capturedOutput(execution) {
+  const parts = [];
+  if (execution.stdout) parts.push(`stdout:\n${execution.stdout}`);
+  if (execution.stderr) parts.push(`stderr:\n${execution.stderr}`);
+  const output = parts.join('\n').trim();
+  if (!output) return { outputCaptured: false, outputTruncated: false };
+
+  if (output.length <= MAX_CAPTURED_OUTPUT_CHARS) {
+    return { outputCaptured: true, outputTruncated: false, output };
+  }
+
+  const marker = '\n... output truncated ...\n';
+  const available = Math.max(0, MAX_CAPTURED_OUTPUT_CHARS - marker.length);
+  const head = Math.ceil(available / 2);
+  const tail = Math.floor(available / 2);
+  return {
+    outputCaptured: true,
+    outputTruncated: true,
+    output: `${output.slice(0, head)}${marker}${output.slice(-tail)}`,
+  };
+}
+
 function executeGate(gate, root) {
   const [command, ...args] = gate.command;
   if (!commandExists(command)) {
@@ -20,7 +44,7 @@ function executeGate(gate, root) {
     required: gate.required,
     durationMs: Date.now() - startedAt,
     exitCode: execution.status,
-    outputCaptured: false,
+    ...capturedOutput(execution),
   };
 }
 
