@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "hds-evidence/v1",
+  "generatedAt": "2026-10-06T17:05:54.524Z",
+  "results": [
+    {
+      "id": "project-validate",
+      "status": "passed",
+      "command": [
+        "npm",
+        "run",
+        "validate"
+      ],
+      "required": true,
+      "durationMs": 6408,
+      "exitCode": 0,
+      "outputCaptured": false
+    }
+  ]
+}
