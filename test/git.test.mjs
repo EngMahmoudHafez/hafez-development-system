@@ -34,4 +34,25 @@ test('Git inspection preserves paths and ignores metadata-only commits for sourc
   assert.notEqual(report.revision, sourceRevision);
   assert.equal(report.sourceRevision, sourceRevision);
   assert.deepEqual(report.changedFiles, ['app.mjs']);
+  assert.equal(report.sourceDirty, true);
+  assert.deepEqual(report.sourceChangedFiles, ['app.mjs']);
+});
+
+
+test('Git inspection separates Hafez metadata dirtiness from source dirtiness', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'hds-git-metadata-'));
+  git(root, 'init', '-b', 'main');
+  git(root, 'config', 'user.name', 'HDS Test');
+  git(root, 'config', 'user.email', 'hds-test@example.invalid');
+  await writeFile(path.join(root, 'app.mjs'), 'export const version = 1;\n');
+  git(root, 'add', 'app.mjs');
+  git(root, 'commit', '-m', 'feat: add source');
+
+  await mkdir(path.join(root, '.hafez'));
+  await writeFile(path.join(root, '.hafez', 'state.json'), '{}\n');
+
+  const metadataOnly = inspectGit(root);
+  assert.equal(metadataOnly.dirty, true);
+  assert.equal(metadataOnly.sourceDirty, false);
+  assert.deepEqual(metadataOnly.sourceChangedFiles, []);
 });
