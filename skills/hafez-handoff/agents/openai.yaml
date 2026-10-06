@@ -1,0 +1,4 @@
+interface:
+  display_name: "Hafez Handoff"
+  short_description: "Create a durable project continuation record"
+  default_prompt: "Use $hafez-handoff to record the current work and its next safe action."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Hafez Inspect"
+  short_description: "Inspect a project without changing files"
+  default_prompt: "Use $hafez-inspect to map this repository and recommend its next safe focus."

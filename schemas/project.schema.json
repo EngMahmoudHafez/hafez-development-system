@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hafez.dev/schemas/project.schema.json",
+  "title": "HDS project policy",
+  "type": "object",
+  "required": ["schemaVersion", "project", "adapters", "gates", "policies"],
+  "properties": {
+    "schemaVersion": { "const": "hds-project/v1" },
+    "project": {
+      "type": "object",
+      "required": ["id", "name"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": true
+    },
+    "adapters": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+    "gates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "command", "required"],
+        "properties": {
+          "id": { "type": "string" },
+          "command": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+          "required": { "type": "boolean" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "policies": { "type": "object" }
+  },
+  "additionalProperties": false
+}

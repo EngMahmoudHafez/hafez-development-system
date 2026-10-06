@@ -1,0 +1,4 @@
+interface:
+  display_name: "Hafez Plan Slice"
+  short_description: "Plan a verifiable vertical project slice"
+  default_prompt: "Use $hafez-plan-slice to turn this goal into a bounded vertical slice."

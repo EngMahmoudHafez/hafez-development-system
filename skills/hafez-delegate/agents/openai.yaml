@@ -1,0 +1,4 @@
+interface:
+  display_name: "Hafez Delegate"
+  short_description: "Delegate bounded work across agent providers"
+  default_prompt: "Use $hafez-delegate to split this work safely across available providers."

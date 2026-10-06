@@ -1,0 +1,32 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "hafez-development-system",
+  "version": "0.1.0",
+  "description": "A provider-neutral project lifecycle, recovery, verification, and delegation system.",
+  "author": {
+    "name": "Mahmoud Hafez",
+    "url": "https://github.com/EngMahmoudHafez"
+  },
+  "license": "MIT",
+  "keywords": ["project-lifecycle", "skills", "delegation", "orchestration"],
+  "skills": "./skills/",
+  "extensions": {
+    "com.openai": {
+      "hooks": "./hooks/hooks.json",
+      "interface": {
+        "displayName": "Hafez Development System",
+        "shortDescription": "Inspect, resume, build, verify, and hand off projects.",
+        "longDescription": "Run a project from discovery through release, or safely adopt and resume an existing codebase with evidence-backed state and provider-neutral delegation.",
+        "developerName": "Mahmoud Hafez",
+        "category": "Productivity",
+        "capabilities": ["Read", "Write"],
+        "defaultPrompt": [
+          "Inspect this project and recommend the next safe action.",
+          "Resume the active slice from its latest evidence.",
+          "Plan and delegate the next vertical slice."
+        ],
+        "brandColor": "#0F766E"
+      }
+    }
+  }
+}

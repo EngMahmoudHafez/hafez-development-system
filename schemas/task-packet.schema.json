@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hafez.dev/schemas/task-packet.schema.json",
+  "title": "HDS delegation task packet",
+  "type": "object",
+  "required": ["schemaVersion", "id", "provider", "role", "access", "projectRoot", "baseRevision", "task", "allowedPaths", "allowedCommands", "timeoutSeconds", "expectedOutput"],
+  "properties": {
+    "schemaVersion": { "const": "hds-task-packet/v1" },
+    "id": { "type": "string" },
+    "provider": { "type": "string" },
+    "role": { "type": "string" },
+    "access": { "enum": ["read-only", "write-worktree"] },
+    "projectRoot": { "type": "string" },
+    "baseRevision": { "type": ["string", "null"] },
+    "activeSlice": { "type": ["string", "null"] },
+    "task": { "type": "string", "minLength": 1 },
+    "allowedPaths": { "type": "array", "items": { "type": "string" } },
+    "allowedCommands": { "type": "array", "items": { "type": "string" } },
+    "timeoutSeconds": { "type": "integer", "minimum": 1 },
+    "expectedOutput": { "type": "array", "items": { "type": "string" } },
+    "packetPath": { "type": "string" }
+  },
+  "additionalProperties": false
+}

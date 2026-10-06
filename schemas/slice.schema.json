@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hafez.dev/schemas/slice.schema.json",
+  "title": "HDS vertical slice",
+  "type": "object",
+  "required": ["schemaVersion", "id", "title", "objective", "status", "businessRules", "acceptanceCriteria", "workUnits", "verification"],
+  "properties": {
+    "schemaVersion": { "const": "hds-slice/v1" },
+    "id": { "type": "string", "pattern": "^S-[0-9]{2,4}$" },
+    "title": { "type": "string", "minLength": 1 },
+    "objective": { "type": "string" },
+    "status": { "enum": ["planned", "in-progress", "blocked", "ready", "released"] },
+    "businessRules": { "type": "array" },
+    "acceptanceCriteria": { "type": "array" },
+    "dependencies": { "type": "array" },
+    "decisions": { "type": "array" },
+    "workUnits": { "type": "array" },
+    "verification": { "type": "array" },
+    "openQuestions": { "type": "array" }
+  },
+  "additionalProperties": false
+}

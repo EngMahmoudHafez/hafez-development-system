@@ -1,0 +1,30 @@
+{
+  "description": "Load resumable project state for Hafez-managed repositories.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${PLUGIN_ROOT}/hooks/session-context.mjs\"",
+            "statusMessage": "Loading Hafez project state",
+            "additionalContextLimit": 1800
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${PLUGIN_ROOT}/hooks/session-context.mjs\"",
+            "statusMessage": "Loading Hafez project state",
+            "additionalContextLimit": 1800
+          }
+        ]
+      }
+    ]
+  }
+}

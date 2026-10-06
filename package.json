@@ -1,0 +1,33 @@
+{
+  "name": "hafez-development-system",
+  "version": "0.1.0",
+  "description": "Provider-neutral project lifecycle and delegation CLI with reusable agent skills.",
+  "type": "module",
+  "bin": {
+    "hafez": "./bin/hafez.mjs",
+    "hds": "./bin/hafez.mjs"
+  },
+  "scripts": {
+    "test": "node --test",
+    "lint": "node scripts/check-syntax.mjs",
+    "validate:json": "node scripts/validate-json.mjs",
+    "validate:skills": "node scripts/validate-skills.mjs",
+    "validate": "npm run lint && npm run validate:json && npm test && npm run validate:skills"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/EngMahmoudHafez/hafez-development-system.git"
+  },
+  "keywords": [
+    "ai-agents",
+    "codex",
+    "claude-code",
+    "kimi",
+    "project-orchestration",
+    "skills"
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "name": "hafez-development-system",
+  "version": "0.1.0",
+  "description": "A stack-aware project lifecycle, recovery, verification, and delegation system.",
+  "author": {
+    "name": "Mahmoud Hafez"
+  },
+  "license": "MIT",
+  "keywords": ["project-lifecycle", "skills", "delegation", "orchestration"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Hafez Development System",
+    "shortDescription": "Inspect, resume, build, verify, and hand off projects.",
+    "longDescription": "Run a project from discovery through release, or safely adopt and resume an existing codebase with evidence-backed state and provider-neutral delegation.",
+    "developerName": "Mahmoud Hafez",
+    "category": "Productivity",
+    "capabilities": ["Read", "Write"],
+    "defaultPrompt": "Inspect this project, identify its current stage, and recommend the next safe action."
+  }
+}

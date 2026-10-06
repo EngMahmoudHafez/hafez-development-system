@@ -1,0 +1,4 @@
+interface:
+  display_name: "Hafez Adopt"
+  short_description: "Add resumable state to an existing project"
+  default_prompt: "Use $hafez-adopt to add safe, resumable project state without changing production code."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Hafez Resume"
+  short_description: "Resume work from Git and recorded evidence"
+  default_prompt: "Use $hafez-resume to reconcile saved state and tell me the next safe action."

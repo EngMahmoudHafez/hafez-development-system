@@ -1,0 +1,4 @@
+interface:
+  display_name: "Hafez Laravel"
+  short_description: "Deliver or adopt Laravel vertical slices"
+  default_prompt: "Use $hafez-laravel to plan this Laravel capability against the existing conventions."

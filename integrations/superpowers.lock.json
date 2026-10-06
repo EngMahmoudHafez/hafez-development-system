@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "hds-integration-lock/v1",
+  "id": "obra/superpowers",
+  "version": "6.4.2",
+  "commit": "8ca22dba",
+  "source": "https://github.com/obra/superpowers",
+  "license": "MIT",
+  "mode": "optional-external",
+  "reviewedAt": "2026-10-06"
+}

@@ -1,0 +1,27 @@
+{
+  "schemaVersion": "hds-project/v1",
+  "project": {
+    "id": "hafez-development-system",
+    "name": "hafez-development-system"
+  },
+  "adapters": [
+    "node"
+  ],
+  "gates": [
+    {
+      "id": "project-validate",
+      "command": [
+        "npm",
+        "run",
+        "validate"
+      ],
+      "required": true
+    }
+  ],
+  "policies": {
+    "planning": "vertical-slices",
+    "requireEvidence": true,
+    "writeDelegationRequiresWorktree": true,
+    "serializedPaths": []
+  }
+}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Hafez Nuxt Vue"
+  short_description: "Build Nuxt and Vue slices against contracts"
+  default_prompt: "Use $hafez-nuxt-vue to build this frontend slice with safe API integration."

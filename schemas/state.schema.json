@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hafez.dev/schemas/state.schema.json",
+  "title": "HDS resumable state",
+  "type": "object",
+  "required": ["schemaVersion", "workflowState", "currentFocus", "nextSafeAction", "gates"],
+  "properties": {
+    "schemaVersion": { "const": "hds-state/v1" },
+    "updatedAt": { "type": "string", "format": "date-time" },
+    "workflowState": { "enum": ["adopted", "planned", "in-progress", "verifying", "blocked", "ready", "handed-off"] },
+    "currentFocus": { "enum": ["discovery", "foundation", "delivery", "integration", "hardening", "release", "operation"] },
+    "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+    "activeSlice": { "type": ["string", "null"] },
+    "lastKnownGoodRevision": { "type": ["string", "null"] },
+    "nextSafeAction": { "type": "string", "minLength": 1 },
+    "blockers": { "type": "array" },
+    "openQuestions": { "type": "array" },
+    "gates": {
+      "type": "object",
+      "additionalProperties": { "enum": ["passed", "failed", "skipped", "unavailable"] }
+    },
+    "lastHandoff": { "type": ["string", "null"] }
+  },
+  "additionalProperties": false
+}

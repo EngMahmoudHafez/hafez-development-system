@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hafez.dev/schemas/capabilities.schema.json",
+  "title": "HDS capability matrix",
+  "type": "object",
+  "required": ["schemaVersion", "capabilities"],
+  "properties": {
+    "schemaVersion": { "const": "hds-capabilities/v1" },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "deliverables"],
+        "properties": {
+          "id": { "type": "string" },
+          "title": { "type": "string" },
+          "dependencies": { "type": "array", "items": { "type": "string" } },
+          "deliverables": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "required": ["status"],
+              "properties": {
+                "status": { "enum": ["unknown", "absent", "specified", "mocked", "implemented", "integrated", "verified", "released", "degraded"] },
+                "evidence": { "type": "array" }
+              }
+            }
+          },
+          "recommendedAction": { "type": "string" }
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

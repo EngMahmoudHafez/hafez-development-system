@@ -1,0 +1,4 @@
+interface:
+  display_name: "Hafez Verify"
+  short_description: "Run gates and record completion evidence"
+  default_prompt: "Use $hafez-verify to prove whether this slice is actually complete."

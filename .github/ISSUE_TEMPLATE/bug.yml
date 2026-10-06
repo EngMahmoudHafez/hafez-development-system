@@ -1,0 +1,25 @@
+name: Bug report
+description: Report reproducible HDS behavior
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Include redacted commands and a minimal project shape.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: HDS, Node.js, OS, stack, and provider versions. Do not include tokens.
+    validations:
+      required: true

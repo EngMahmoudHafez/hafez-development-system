@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "hds-state/v1",
+  "updatedAt": "2026-10-06T14:13:55.546Z",
+  "workflowState": "adopted",
+  "currentFocus": "delivery",
+  "confidence": 0.8,
+  "activeSlice": null,
+  "lastKnownGoodRevision": null,
+  "nextSafeAction": "Review and verify the current uncommitted work before starting another slice.",
+  "blockers": [],
+  "openQuestions": [],
+  "gates": {},
+  "lastHandoff": null
+}
