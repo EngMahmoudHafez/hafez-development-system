@@ -13,7 +13,7 @@ import { runAutonomous } from './core/runner.mjs';
 import { validateProjectMetadata } from './core/metadata-validator.mjs';
 import { migrateFiles, migrationTargets } from './core/migrations.mjs';
 import { initializeWorkspace, inspectWorkspace, verifyWorkspace } from './core/workspace.mjs';
-import { checkIntegrationReadiness, ingestDelegationResult, listIntegrationQueue } from './core/delegation.mjs';
+import { abortDelegation, checkIntegrationReadiness, ingestDelegationResult, listIntegrationQueue } from './core/delegation.mjs';
 
 const help = `Hafez Development System
 
@@ -30,6 +30,7 @@ Usage:
                  [--allowed-path <path>] [--allowed-command <command>] [--execute]
   hafez delegate-result <task-id> --file <result.json> [--path <path>]
   hafez delegation-status <task-id> [--path <path>]
+  hafez delegation-abort <task-id> [--path <path>]
   hafez integration-queue [path] [--json]
   hafez validate [path] [--json]
   hafez migrate [path-or-file] [--apply] [--json]
@@ -174,6 +175,12 @@ async function runDelegationStatus(positionals, flags) {
   return checkIntegrationReadiness(path.resolve(flags.path || '.'), taskId);
 }
 
+async function runDelegationAbort(positionals, flags) {
+  const taskId = positionals[1];
+  if (!taskId) throw new Error('Usage: hafez delegation-abort <task-id> [--path <path>]');
+  return abortDelegation(path.resolve(flags.path || '.'), taskId);
+}
+
 export async function main(argv) {
   const { positionals, flags } = parseArguments(argv);
   const command = positionals[0];
@@ -191,6 +198,7 @@ export async function main(argv) {
   else if (command === 'delegate') result = await runDelegate(positionals, flags);
   else if (command === 'delegate-result') result = await runDelegateResult(positionals, flags);
   else if (command === 'delegation-status') result = await runDelegationStatus(positionals, flags);
+  else if (command === 'delegation-abort') result = await runDelegationAbort(positionals, flags);
   else result = await runProjectCommand(command, positionals[1] || flags.path || '.', flags);
   print(result, Boolean(flags.json));
 }
