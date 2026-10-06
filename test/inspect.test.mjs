@@ -21,6 +21,6 @@ test('inspect detects a partial Nuxt project without writing files', async () =>
   assert.deepEqual(report.stacks, ['nuxt']);
   assert.equal(report.inference.currentFocus, 'foundation');
   assert.equal(report.engineering.tests, true);
-  assert.ok(report.engineering.testPath.endsWith('app/app.test.ts'));
+  assert.equal(path.relative(root, report.engineering.testPath), path.join('app', 'app.test.ts'));
   assert.equal(report.engineering.hafez, false);
 });

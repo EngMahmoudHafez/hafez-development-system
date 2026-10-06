@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { realpathSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
 import { run, runText } from './process.mjs';
 import { slugify } from './files.mjs';
@@ -18,7 +19,7 @@ function nulSeparated(output) {
 export function gitRepositoryState(root) {
   const repositoryRoot = runText('git', ['rev-parse', '--show-toplevel'], root);
   if (!repositoryRoot) throw new Error('Write-capable delegation requires a Git repository.');
-  if (path.resolve(repositoryRoot) !== path.resolve(root)) {
+  if (realpathSync(repositoryRoot) !== realpathSync(root)) {
     throw new Error('Write-capable delegation must be prepared from the Git repository root.');
   }
 

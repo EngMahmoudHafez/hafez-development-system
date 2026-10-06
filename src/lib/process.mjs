@@ -1,6 +1,9 @@
 import { spawnSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import path from 'node:path';
 
 export function commandExists(command) {
+  if (path.isAbsolute(command)) return existsSync(command);
   const locator = process.platform === 'win32' ? 'where' : 'which';
   return spawnSync(locator, [command], { stdio: 'ignore' }).status === 0;
 }

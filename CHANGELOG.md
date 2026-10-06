@@ -5,6 +5,8 @@ remain explicitly versioned.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-06
+
 ### Added
 
 - bounded autonomous runner with explicit decision boundaries;
@@ -12,6 +14,11 @@ remain explicitly versioned.
 - JSON schema validation, safe migrations, and multi-repository workspaces;
 - onboarding skill, plugin artwork, skill activation cases, and release automation;
 - cross-platform acceptance coverage and supply-chain release artifacts.
+
+### Fixed
+
+- canonical repository-root comparison on filesystems that expose aliased paths;
+- absolute executable discovery and path assertions across Windows, macOS, and Linux.
 
 ## [0.1.2] - 2026-10-06
 
