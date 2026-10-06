@@ -55,7 +55,17 @@ function stop(status, reason, details = {}) {
   return { status, reason, ...details };
 }
 
-function recordedBoundary(resume, state) {
+function requiredGateIds(project) {
+  const ids = new Set(
+    (project.gates ?? [])
+      .filter((gate) => gate.required)
+      .map((gate) => gate.id),
+  );
+  if (project.policies?.architectureProfile) ids.add('architecture-structure');
+  return ids;
+}
+
+function recordedBoundary(resume, state, project) {
   if (!resume.managed) {
     return stop('paused', 'adoption-required', {
       decisionBoundary: 'Adoption writes project operating metadata and must be requested explicitly.',
@@ -75,8 +85,9 @@ function recordedBoundary(resume, state) {
     });
   }
 
+  const requiredIds = requiredGateIds(project);
   const gateStops = Object.entries(resume.gates)
-    .filter(([, status]) => ['failed', 'unavailable', 'skipped'].includes(status))
+    .filter(([id, status]) => requiredIds.has(id) && ['failed', 'unavailable', 'skipped'].includes(status))
     .map(([id, status]) => ({ id, status }));
   if (gateStops.length > 0) {
     return stop('blocked', 'quality-gates-not-passed', {
@@ -113,8 +124,8 @@ function authorityBoundary(resume, state) {
   return null;
 }
 
-function boundaryFor(resume, state) {
-  return recordedBoundary(resume, state) ?? authorityBoundary(resume, state);
+function boundaryFor(resume, state, project) {
+  return recordedBoundary(resume, state, project) ?? authorityBoundary(resume, state);
 }
 
 function commandAction(id, description, previewCommand, executeCommand = null) {
@@ -201,7 +212,7 @@ async function resumeTransition(root) {
 }
 
 function boundaryTransition(resume, managed) {
-  const outcome = boundaryFor(resume, managed?.state ?? {});
+  const outcome = boundaryFor(resume, managed?.state ?? {}, managed?.project ?? {});
   return { phase: 'choose-safe-action', outcome, traceResult: outcome?.reason ?? 'clear' };
 }
 
