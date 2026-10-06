@@ -16,7 +16,7 @@ function requiredGateProblems(managed) {
 
 function chooseNextAction(report, managed) {
   if (!managed) return 'Preview adoption with `hafez adopt .`, then apply it with `hafez adopt . --apply`.';
-  if (report.git.dirty) return 'Review and verify the current uncommitted changes before delegating new work.';
+  if (report.git.sourceDirty) return 'Review and verify the current uncommitted source changes before delegating new work.';
   if (managed.state.blockers?.length) return `Resolve blocker ${managed.state.blockers[0].id ?? 'listed in state'} first.`;
   const gateProblems = requiredGateProblems(managed);
   if (gateProblems.length) return `Repair required quality gate ${gateProblems[0].id} (${gateProblems[0].status}) and rerun verification.`;
