@@ -84,6 +84,8 @@ directory you actually chose:
 ```bash
 hafez init .             # read-only preview
 hafez init . --apply     # create only Hafez state and operating docs
+hafez init . --architecture-profile laravel-domain-slices-v1 --apply
+                         # explicitly opt in to the strict Laravel baseline
 hafez run .              # show one bounded next action
 hafez run . --execute    # execute deterministic gates/handoffs; pause before agent-owned work
 ```
@@ -199,6 +201,10 @@ Run a read-only structural audit with:
 hafez architecture /path/to/laravel-project --json
 ```
 
+The profile is never forced onto an existing Laravel repository during adoption. Legacy projects can
+adopt Hafez first and migrate one vertical slice at a time; enable the profile explicitly only after
+choosing that architecture policy.
+
 The automated audit never pretends folder checks prove behavior; the skill also requires manual
 review of controller, Action, Policy, query, and test boundaries.
 
@@ -221,9 +227,11 @@ external isolation; Zed and Antigravity Desktop are treated as hosts rather than
 
 Write-capable task packets now create one managed detached worktree, one writer reservation, explicit
 path and command scopes, a base revision, and a structured result that must pass integration-readiness
-checks. Hafez still leaves commit integration to one human or host-agent integrator. Kimi and
-Antigravity CLI execution stays packet-only until the caller provides a hard external isolation
-boundary. See [provider rules](docs/providers.md).
+checks. Interrupted write tasks remain visible in `hafez integration-queue` as pending work. If a
+writer session is intentionally abandoned, `hafez delegation-abort <task-id>` removes its managed
+worktree and releases its reservation so a replacement writer can proceed safely. Hafez still leaves
+commit integration to one human or host-agent integrator. Kimi and Antigravity CLI execution stays
+packet-only until the caller provides a hard external isolation boundary. See [provider rules](docs/providers.md).
 
 ## Multi-repository products
 
