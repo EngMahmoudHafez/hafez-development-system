@@ -144,7 +144,15 @@ function verificationAction(id, description) {
   return commandAction(id, description, 'hafez verify .', 'hafez verify . --execute');
 }
 
-function dirtyWorkAction(state) {
+function dirtyWorkAction(state, project) {
+  const pendingGateIds = unverifiedGateIds(project, state);
+  if (state.workflowState === 'ready' && pendingGateIds.length === 0) {
+    return commandAction(
+      'create-handoff',
+      'Create a durable handoff for the verified uncommitted work before further changes.',
+      'hafez handoff .',
+    );
+  }
   if (Object.keys(state.gates ?? {}).length === 0) {
     return commandAction(
       'preview-verification',
@@ -169,7 +177,7 @@ function unverifiedGateIds(project, state) {
 
 function chooseAction(resume, managed) {
   const { project, state } = managed;
-  if (resume.git.dirty) return dirtyWorkAction(state);
+  if (resume.git.dirty) return dirtyWorkAction(state, project);
   if (resume.staleRevision) {
     return agentAction(
       'reconcile-project-state',
