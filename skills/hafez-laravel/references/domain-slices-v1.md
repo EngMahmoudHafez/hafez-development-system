@@ -1,7 +1,8 @@
 # Laravel domain slices v1
 
 This profile captures the portable architecture contract used by the Hafez Laravel skill and the
-reference education-platform backend. It is a modular monolith delivered through vertical slices.
+reviewed Laravel project patterns. It is a modular monolith delivered through vertical slices and is
+applied only when the project policy explicitly selects this profile.
 
 ## Required structure
 

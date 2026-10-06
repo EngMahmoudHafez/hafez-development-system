@@ -102,6 +102,7 @@ export async function adoptProject(report) {
   if (await writeJsonIfMissing(paths.state, workflowState(report))) created.push(paths.state);
   if (await writeJsonIfMissing(paths.capabilities, { schemaVersion: 'hds-capabilities/v1', capabilities: [] })) created.push(paths.capabilities);
   if (await writeJsonIfMissing(paths.delegation, { schemaVersion: 'hds-delegation/v1', defaultAccess: 'read-only', providers: {} })) created.push(paths.delegation);
+  if (await writeTextIfMissing(path.join(paths.directory, '.gitignore'), 'delegations/\n')) created.push(path.join(paths.directory, '.gitignore'));
   if (await writeTextIfMissing(path.join(report.root, 'AGENTS.md'), agentsTemplate())) created.push(path.join(report.root, 'AGENTS.md'));
   created.push(...await createDocumentation(report.root));
   return { root: report.root, created, idempotent: created.length === 0 };

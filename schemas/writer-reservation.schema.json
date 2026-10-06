@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hafez.dev/schemas/writer-reservation.schema.json",
+  "title": "HDS single-writer reservation",
+  "type": "object",
+  "required": ["schemaVersion", "id", "taskId", "baseRevision", "worktreePath", "createdAt"],
+  "properties": {
+    "schemaVersion": { "const": "hds-writer-reservation/v1" },
+    "id": { "type": "string", "minLength": 1 },
+    "taskId": { "type": "string", "minLength": 1 },
+    "baseRevision": { "type": "string", "minLength": 1 },
+    "worktreePath": { "type": ["string", "null"] },
+    "createdAt": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false
+}

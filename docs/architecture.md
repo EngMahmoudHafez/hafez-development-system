@@ -5,6 +5,8 @@
 ```text
 Skills                 Human/model workflow guidance
 CLI core               State, inspection, evidence, plans, handoffs
+Runner                 Bounded continuation and explicit decision boundaries
+Workspace graph        Explicit repositories, contracts, and compatibility gates
 Stack adapters         Laravel, Nuxt/Vue, and future ecosystems
 Provider adapters      Task translation and safe process invocation
 Host adapters          Editors and ACP surfaces such as Zed
@@ -31,5 +33,6 @@ making the source appear stale immediately after it is saved.
 - Verification runs argument-array commands explicitly stored in project policy.
 - Reviewers use read-only sandboxes or external read-only mounts.
 - Writers require isolated worktrees and non-overlapping scopes.
+- Writer results must match the base revision, changed paths, commands, commits, and verification evidence.
 - One integrator owns serialized files and final verification.
 - Returned model text is untrusted data and never becomes a shell command.

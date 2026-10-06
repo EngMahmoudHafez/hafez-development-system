@@ -4,6 +4,15 @@ import { hafezPaths, loadProjectState } from './state.mjs';
 import { isoFileTimestamp, slugify, writeJson } from '../lib/files.mjs';
 import { randomUUID } from 'node:crypto';
 import { inspectGit } from '../lib/git.mjs';
+import { createManagedWorktree, discardManagedWorktree, gitRepositoryState } from '../lib/git-worktrees.mjs';
+import {
+  delegationPacketPath,
+  hasWriterReservation,
+  releaseWriterReservation,
+  reserveWriter,
+  updateWriterReservation,
+  validateDelegationScope,
+} from './delegation.mjs';
 
 const providerDefinitions = {
   codex: { command: 'codex', kind: 'agent-cli', aliases: ['openai'] },
@@ -20,22 +29,48 @@ function canonicalProvider(name) {
 }
 
 function buildPrompt(packet) {
+  const executionRoot = packet.worktree?.path ?? packet.projectRoot;
   return [
     `Role: ${packet.role}`,
     `Access: ${packet.access}`,
-    `Project: ${packet.projectRoot}`,
+    `Project: ${executionRoot}`,
+    `Base revision: ${packet.baseRevision ?? 'not available'}`,
     `Task: ${packet.task}`,
     'Read AGENTS.md and .hafez/state.json before acting.',
     'Return: summary, files inspected or changed, verification evidence, risks, blockers, and next action.',
-    packet.access === 'read-only' ? 'Do not modify files.' : 'Write only inside the assigned worktree and scope.',
+    packet.access === 'read-only'
+      ? 'Do not modify files.'
+      : `Write only inside the assigned worktree. Allowed paths: ${packet.allowedPaths.join(', ')}. Allowed commands (exact): ${packet.allowedCommands.join(', ')}.`,
+    'Return one JSON object matching hds-delegation-result/v1. Do not wrap it in Markdown.',
   ].join('\n');
 }
 
-function invocationFor(provider, packet) {
+export function providerInvocation(provider, packet) {
   const prompt = buildPrompt(packet);
-  if (provider === 'codex') return { command: 'codex', args: ['exec', '--ephemeral', '--ignore-user-config', '--json', '--sandbox', 'read-only', '--cd', packet.projectRoot, '-'], input: prompt };
-  if (provider === 'claude') return { command: 'claude', args: ['--restricted', '--strict-mcp-config', '--print', '--permission-prompts', 'none', '--tools', 'Read,Glob,Grep', '--no-session-persistence', '--output-format', 'json'], input: prompt };
-  if (provider === 'gemini') return { command: 'gemini', args: ['--prompt', prompt, '--approval-mode=plan', '--sandbox', '--output-format', 'json'] };
+  const executionRoot = packet.worktree?.path ?? packet.projectRoot;
+  const readOnly = packet.access === 'read-only';
+  if (provider === 'codex') return {
+    command: 'codex',
+    args: ['exec', '--ephemeral', '--ignore-user-config', '--json', '--sandbox', readOnly ? 'read-only' : 'workspace-write', '--cd', executionRoot, '-'],
+    input: prompt,
+    cwd: executionRoot,
+  };
+  if (provider === 'claude') {
+    const tools = readOnly ? 'Read,Glob,Grep' : 'Read,Glob,Grep,Edit,Write,Bash';
+    return {
+      command: 'claude',
+      args: ['--restricted', '--strict-mcp-config', '--print', '--permission-prompts', 'none', '--tools', tools, '--no-session-persistence', '--output-format', 'json'],
+      input: prompt,
+      cwd: executionRoot,
+    };
+  }
+  if (provider === 'gemini') return {
+    command: 'gemini',
+    args: ['--prompt', prompt, '--approval-mode', readOnly ? 'plan' : 'auto_edit', '--sandbox', '--output-format', 'json'],
+    cwd: executionRoot,
+  };
+  if (provider === 'kimi') return { command: 'kimi', args: ['-p', prompt, '--output-format', 'stream-json'], cwd: executionRoot };
+  if (provider === 'antigravity-cli') return { command: 'agy', args: ['-p', prompt, '--sandbox', '--output-format', 'json'], cwd: executionRoot };
   return null;
 }
 
@@ -49,6 +84,45 @@ function assertTaskIsSafeToStore(task) {
   if (secretPatterns.some((pattern) => pattern.test(task))) {
     throw new Error('Task text appears to contain a secret. Redact it before creating a delegation packet.');
   }
+}
+
+function createTaskId(role) {
+  const roleSlug = slugify(role).slice(0, 64);
+  return `${isoFileTimestamp()}-${roleSlug}-${randomUUID().slice(0, 8)}`.toLowerCase();
+}
+
+async function cleanupWriteContext(root, context) {
+  if (context.worktree) discardManagedWorktree(root, context.worktree.path);
+  if (context.reservation) await releaseWriterReservation(root, context.taskId, context.reservation.id);
+}
+
+async function prepareWriteContext(root, taskId, options) {
+  if (hasWriterReservation(root)) throw new Error('A write-capable delegation is already reserved.');
+  const scope = validateDelegationScope(options.allowedPaths, options.allowedCommands);
+  const repository = gitRepositoryState(root);
+  if (repository.dirty) throw new Error('Write-capable delegation requires a clean integration worktree.');
+  let reservation = await reserveWriter(root, taskId, repository.baseRevision);
+  let worktree = null;
+  try {
+    worktree = await createManagedWorktree(repository.root, { taskId, baseRevision: repository.baseRevision });
+    reservation = await updateWriterReservation(root, reservation, worktree.path);
+    return { taskId, baseRevision: repository.baseRevision, worktree, reservation, ...scope };
+  } catch (error) {
+    await cleanupWriteContext(root, { taskId, worktree, reservation });
+    throw error;
+  }
+}
+
+async function prepareDelegationContext(root, taskId, options) {
+  if (options.access === 'write-worktree') return prepareWriteContext(root, taskId, options);
+  return {
+    taskId,
+    baseRevision: inspectGit(root).revision ?? null,
+    allowedPaths: [],
+    allowedCommands: [],
+    worktree: null,
+    reservation: null,
+  };
 }
 
 export function providerStatus() {
@@ -80,12 +154,17 @@ function probeProvider(name, provider) {
 export async function prepareDelegation(root, options) {
   const provider = canonicalProvider(options.provider);
   if (!provider) throw new Error(`Unknown provider: ${options.provider}`);
-  if (options.access !== 'read-only') throw new Error('MVP execution supports read-only delegates only. Generate write task packets and use an isolated worktree manually.');
+  if (!['read-only', 'write-worktree'].includes(options.access)) throw new Error(`Unsupported delegation access: ${options.access}`);
+  if (providerDefinitions[provider].kind === 'editor-host' && options.access === 'write-worktree') {
+    throw new Error(`${provider} is an interactive host and cannot own a write-capable delegation.`);
+  }
   const managed = await loadProjectState(root);
   if (!managed) throw new Error('Project is not adopted. Run `hafez adopt . --apply` before delegating work.');
   assertTaskIsSafeToStore(options.task);
-  const taskId = `${isoFileTimestamp()}-${slugify(options.role)}-${randomUUID().slice(0, 8)}`;
-  const packetPath = path.join(hafezPaths(root).delegations, `${taskId}.json`);
+  const taskId = createTaskId(options.role);
+  const packetPath = delegationPacketPath(root, taskId);
+  const context = await prepareDelegationContext(root, taskId, options);
+
   const packet = {
     schemaVersion: 'hds-task-packet/v1',
     id: taskId,
@@ -93,16 +172,23 @@ export async function prepareDelegation(root, options) {
     role: options.role,
     access: options.access,
     projectRoot: path.resolve(root),
-    baseRevision: inspectGit(root).revision ?? null,
+    baseRevision: context.baseRevision,
     activeSlice: managed?.state.activeSlice ?? null,
     task: options.task,
-    allowedPaths: [],
-    allowedCommands: [],
+    allowedPaths: context.allowedPaths,
+    allowedCommands: context.allowedCommands,
+    worktree: context.worktree,
+    reservation: context.reservation ? { id: context.reservation.id, path: context.reservation.reservationPath } : null,
     timeoutSeconds: 900,
     expectedOutput: ['summary', 'evidence', 'risks', 'blockers', 'nextAction'],
   };
   packet.packetPath = packetPath;
-  await writeJson(packetPath, packet);
+  try {
+    await writeJson(packetPath, packet);
+  } catch (error) {
+    await cleanupWriteContext(root, context);
+    throw error;
+  }
   return packet;
 }
 
@@ -113,10 +199,13 @@ export function executeDelegation(packet) {
   if (['zed', 'antigravity'].includes(packet.provider)) {
     throw new Error(`${packet.provider} is an interactive host. Open the generated task packet manually.`);
   }
-  const invocation = invocationFor(packet.provider, packet);
+  const invocation = providerInvocation(packet.provider, packet);
   if (!invocation) throw new Error(`${packet.provider} is an interactive host; open the generated task packet manually.`);
   if (!commandExists(invocation.command)) throw new Error(`${invocation.command} is not installed or not on PATH.`);
-  const execution = run(invocation.command, invocation.args, { cwd: packet.projectRoot, input: invocation.input });
+  if (packet.access === 'write-worktree' && (!packet.worktree?.path || !packet.reservation?.id)) {
+    throw new Error('Write-capable delegation is missing managed worktree or writer reservation metadata.');
+  }
+  const execution = run(invocation.command, invocation.args, { cwd: invocation.cwd, input: invocation.input, timeout: packet.timeoutSeconds * 1000 });
   if (execution.status !== 0) {
     throw new Error(`${packet.provider} delegation failed with exit code ${execution.status}. Task packet: ${packet.packetPath}`);
   }

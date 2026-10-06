@@ -2,8 +2,8 @@
 
 | Adapter | Local probe | Current HDS behavior | Hard read-only guarantee |
 |---|---:|---|---:|
-| Codex/OpenAI | `codex` | headless read-only execution | yes, through Codex sandbox |
-| Claude Code | `claude` | restricted headless review | yes, with read-only tools |
+| Codex/OpenAI | `codex` | read-only review or managed-worktree writer | yes for reviews, through Codex sandbox |
+| Claude Code | `claude` | restricted review or managed-worktree writer | yes for reviews, with read-only tools |
 | Kimi Code | `kimi` | task packet only | external isolation required |
 | Gemini CLI | `gemini` | optional plan-mode execution | provider sandbox plus plan policy |
 | Antigravity desktop | `antigravity` | task packet/manual handoff | host only |
@@ -20,3 +20,14 @@ Provider probes report `installed`, `configured`, and `ready` separately. Codex 
 - Reviewers receive a stable read-only snapshot.
 - Implementers return a commit or patch from an isolated worktree.
 - The integrator rechecks the base revision and runs local gates.
+
+## Write-capable task contract
+
+A writer is prepared only from a clean Git root and receives one detached managed worktree. Hafez
+records a base revision, one-writer reservation, allowed paths, exact reported command allowlist, and
+a structured result. Integration readiness rejects dirty worktrees, base drift, merge commits,
+out-of-scope files, mismatched revisions, unreported files, and failed or skipped verification.
+
+The command allowlist is an acceptance and audit boundary, not a universal operating-system sandbox.
+Provider sandboxes and external container or read-only mount controls remain authoritative. Hafez
+does not automatically merge, push, publish, or release delegated commits.

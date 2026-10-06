@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "hafez-development-system",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "A skills-first project operating system that inspects, resumes, builds, verifies, and hands off software work.",
   "author": {
     "name": "Mahmoud Hafez",
@@ -15,6 +15,7 @@
   "extensions": {
     "com.openai": {
       "hooks": "./hooks/hooks.json",
+      "onboardingSkill": "./skills/hafez-get-started/SKILL.md",
       "interface": {
         "displayName": "Hafez Development System",
         "shortDescription": "Take a project from its current state to a verified milestone.",
@@ -27,6 +28,8 @@
           "Resume the active slice and keep working until a genuine decision is required.",
           "Plan and deliver the next Laravel and Nuxt vertical slice."
         ],
+        "logo": "./assets/hafez-logo.svg",
+        "composerIcon": "./assets/hafez-composer.svg",
         "brandColor": "#0F766E"
       }
     }

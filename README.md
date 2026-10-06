@@ -2,7 +2,7 @@
 
 > A skills-first project operating system for AI-assisted software delivery.
 
-[العربية](README.ar.md) · [Pilot guide](docs/trial-runbook.md) · [Architecture](docs/architecture.md) · [Roadmap](docs/roadmap.md)
+[العربية](README.ar.md) · [First run](#first-run) · [Architecture](docs/architecture.md) · [Roadmap](docs/roadmap.md) · [Security model](docs/threat-model.md)
 
 Hafez helps an AI agent understand where a project really is, choose the right workflow, continue
 unfinished work, deliver vertical slices, verify evidence, and leave a durable handoff. It works for
@@ -38,6 +38,7 @@ specific skill such as `$hafez-resume` or `$hafez-laravel` when they want direct
 | An unfamiliar or half-built repository | Inspects code, Git, tests, CI, contracts, and documentation before recommending work |
 | Context lost between chats or models | Stores compact, reviewable state and handoffs inside the repository |
 | Features split across backend and frontend | Plans one capability as matching vertical slices with shared acceptance criteria |
+| One product spans several repositories | Uses an explicit repository and contract graph without guessing from project names |
 | Agents stopping after the first patch | Continues through local verification and repairs until completion or a genuine decision boundary |
 | Architecture drifting over time | Applies stack profiles such as `laravel-domain-slices-v1` and verifies structural requirements |
 | Multiple AI subscriptions | Creates bounded provider task packets without sharing credentials or pretending editors are model providers |
@@ -74,6 +75,22 @@ docs/hafez/
 ├── slices/
 └── handoffs/
 ```
+
+## First run
+
+Hafez never assumes a repository shown in documentation is the project to operate on. Start in the
+directory you actually chose:
+
+```bash
+hafez init .             # read-only preview
+hafez init . --apply     # create only Hafez state and operating docs
+hafez run .              # show one bounded next action
+hafez run . --execute    # execute deterministic gates/handoffs; pause before agent-owned work
+```
+
+`hafez run` is bounded and resumable. In plugin/skills mode the host agent performs queued planning
+and implementation work and keeps cycling until a recorded decision boundary. The standalone CLI
+executes only deterministic operations itself; it never pretends to contain an LLM.
 
 ## Install
 
@@ -143,6 +160,7 @@ and `npm install --global /absolute/path`.
 | Skill | Activated for |
 |---|---|
 | `hafez` | End-to-end work or when the correct phase is unclear |
+| `hafez-get-started` | Safe first-run inspection and choosing an installation mode |
 | `hafez-inspect` | Read-only understanding of an unfamiliar repository |
 | `hafez-adopt` | Adding durable Hafez state without changing application code |
 | `hafez-resume` | Continuing from Git, evidence, blockers, and the latest handoff |
@@ -152,6 +170,7 @@ and `npm install --global /absolute/path`.
 | `hafez-delegate` | Bounded work for Codex, Claude, Kimi, Gemini, Antigravity, or Zed workflows |
 | `hafez-verify` | Required quality gates and durable evidence |
 | `hafez-handoff` | Safe stopping, ownership changes, blockers, and release checkpoints |
+| `hafez-workspace` | Explicit multi-repository members, contracts, and integration state |
 
 Skills use progressive disclosure: the model first sees a short description, loads the selected
 workflow only when relevant, and reads detailed references only when that mode needs them.
@@ -165,7 +184,7 @@ them because installed skills run with the permissions of the host agent.
 
 ## Laravel architecture profile
 
-`laravel-domain-slices-v1` codifies the architecture used by the reference education platform:
+`laravel-domain-slices-v1` codifies an opt-in Laravel modular-monolith baseline:
 
 - `app/Domain/<Module>` owns business behavior;
 - Controllers coordinate `FormRequest → Action → Resource`;
@@ -200,9 +219,46 @@ Hafez routes capabilities, not accounts. Authentication, billing, and usage limi
 provider. Read-only Codex and Claude adapters are available; Kimi and Antigravity writers require hard
 external isolation; Zed and Antigravity Desktop are treated as hosts rather than extra model quotas.
 
-Write-capable multi-provider automation remains intentionally limited until managed worktrees, path
-reservations, and an integration queue ship. See [provider rules](docs/providers.md) and the
-[roadmap](docs/roadmap.md).
+Write-capable task packets now create one managed detached worktree, one writer reservation, explicit
+path and command scopes, a base revision, and a structured result that must pass integration-readiness
+checks. Hafez still leaves commit integration to one human or host-agent integrator. Kimi and
+Antigravity CLI execution stays packet-only until the caller provides a hard external isolation
+boundary. See [provider rules](docs/providers.md).
+
+## Multi-repository products
+
+Create a workspace only from explicit members:
+
+```bash
+hafez workspace /path/to/product \
+  --init \
+  --repository service=repositories/service \
+  --repository client=repositories/client
+
+# Review, then persist it
+hafez workspace /path/to/product --init \
+  --repository service=repositories/service \
+  --repository client=repositories/client \
+  --apply
+```
+
+Add producer/consumer contracts to `.hafez/workspace.json`, then inspect the graph with
+`hafez workspace /path/to/product`. The identifiers above are deliberately generic examples. See
+[workspace contracts](docs/workspaces.md).
+
+Preview or execute workspace compatibility gates with `hafez workspace-verify /path/to/product` and
+`hafez workspace-verify /path/to/product --execute`.
+
+## Validation and migration
+
+```bash
+hafez validate .
+hafez migrate .          # dry-run
+hafez migrate . --apply  # known, schema-validated migrations only
+```
+
+Migrations never fill missing product facts. An old document that cannot satisfy the current schema
+stops with field-level errors for a maintainer decision.
 
 ## Superpowers compatibility
 
@@ -213,15 +269,16 @@ handoffs. See [the integration guide](docs/integrations/superpowers.md).
 
 ## Try the full lifecycle
 
-The [end-to-end pilot runbook](docs/trial-runbook.md) uses isolated worktrees for the reference Laravel
-backend and Nuxt frontend, adopts both repositories, delivers one shared slice, verifies every gate,
-tests a real decision boundary, and proves that a fresh session can resume without chat history.
+The [end-to-end acceptance runbook](docs/trial-runbook.md) uses only repositories the tester explicitly
+selects. It exercises adoption, a slice, gates, a decision boundary, isolated delegation, optional
+workspace contracts, and fresh-session recovery without treating any documented path as a target.
 
 ## Project status
 
-Version `0.1.2` is an evidence-backed preview. It includes the portable Agent Plugin manifest, Codex
-compatibility manifest, ten skills, lifecycle hooks, the dependency-free Node.js CLI, tests, schemas,
-and open-source governance files.
+Version `0.2.0` is an evidence-backed preview. It includes the portable Agent Plugin manifest, Codex
+compatibility manifest, twelve skills, onboarding and artwork, lifecycle hooks, the dependency-free
+Node.js CLI, schema validation and migrations, bounded autonomous continuation, isolated delegation,
+multi-repository workspaces, release automation, tests, and open-source governance files.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), [GOVERNANCE.md](GOVERNANCE.md),
 and [SUPPORT.md](SUPPORT.md). Hafez is released under the [MIT License](LICENSE).
@@ -230,6 +287,7 @@ and [SUPPORT.md](SUPPORT.md). Hafez is released under the [MIT License](LICENSE)
 
 ```bash
 npm run validate
+npm run test:package
 ```
 
 Maintainers with the built-in `plugin-creator` skill should also run its validator before publishing.

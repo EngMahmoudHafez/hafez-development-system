@@ -1,10 +1,19 @@
-## Summary
+## Outcome
 
-## Evidence
+Describe the user-visible or contract-level outcome.
 
-- [ ] `npm run validate`
-- [ ] New behavior has observable tests
-- [ ] Provider or schema changes include compatibility notes
-- [ ] No credentials, private prompts, or session data are included
+## Safety and compatibility
 
-## Risks and rollback
+- [ ] No credentials, provider sessions, or private prompts are included.
+- [ ] Schema and provider changes include compatibility tests.
+- [ ] Write-capable delegation remains isolated to a worktree.
+- [ ] Documentation and changelog are updated when behavior changes.
+
+## Verification
+
+List the commands run and their results. `npm run validate` is required.
+
+## Contracts changed
+
+List affected schemas, CLI commands, plugin metadata, skills, or provider adapters. Write `none` when
+the change is internal only.

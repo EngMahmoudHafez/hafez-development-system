@@ -1,0 +1,21 @@
+{
+  "name": "hafez",
+  "interface": {
+    "displayName": "Hafez Development System"
+  },
+  "plugins": [
+    {
+      "name": "hafez-development-system",
+      "source": {
+        "source": "url",
+        "url": "https://github.com/EngMahmoudHafez/hafez-development-system.git",
+        "ref": "main"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

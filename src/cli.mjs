@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { readFile } from 'node:fs/promises';
 import { inspectProject } from './core/inspector.mjs';
 import { adoptProject } from './core/state.mjs';
 import { resumeProject } from './core/resume.mjs';
@@ -8,17 +9,32 @@ import { createHandoff } from './core/handoff.mjs';
 import { executeDelegation, prepareDelegation, providerStatus } from './core/providers.mjs';
 import { listSkills } from './core/skill-registry.mjs';
 import { auditArchitecture } from './core/architecture.mjs';
+import { runAutonomous } from './core/runner.mjs';
+import { validateProjectMetadata } from './core/metadata-validator.mjs';
+import { migrateFiles, migrationTargets } from './core/migrations.mjs';
+import { initializeWorkspace, inspectWorkspace, verifyWorkspace } from './core/workspace.mjs';
+import { checkIntegrationReadiness, ingestDelegationResult, listIntegrationQueue } from './core/delegation.mjs';
 
 const help = `Hafez Development System
 
 Usage:
   hafez inspect [path] [--json]
+  hafez init [path] [--apply] [--json]
   hafez adopt [path] [--apply] [--json]
   hafez resume [path] [--json]
+  hafez run [path] [--max-steps N] [--execute] [--json]
   hafez plan <S-ID> <title> [--path <path>] [--json]
   hafez verify [path] [--execute] [--json]
   hafez handoff [path] [--json]
-  hafez delegate <provider> --role <role> --task <task> [--execute] [--path <path>]
+  hafez delegate <provider> --role <role> --task <task> [--access read-only|write-worktree]
+                 [--allowed-path <path>] [--allowed-command <command>] [--execute]
+  hafez delegate-result <task-id> --file <result.json> [--path <path>]
+  hafez delegation-status <task-id> [--path <path>]
+  hafez integration-queue [path] [--json]
+  hafez validate [path] [--json]
+  hafez migrate [path-or-file] [--apply] [--json]
+  hafez workspace [path] [--init --repository <id=relative-path> --apply] [--json]
+  hafez workspace-verify [path] [--execute] [--json]
   hafez doctor [path] [--json]
   hafez skills [path] [--json]
   hafez architecture [path] [--json]
@@ -48,11 +64,17 @@ function parseArguments(argv) {
     const next = argv[index + 1];
     if (!next || next.startsWith('--')) flags[key] = true;
     else {
-      flags[key] = next;
+      if (Object.hasOwn(flags, key)) flags[key] = Array.isArray(flags[key]) ? [...flags[key], next] : [flags[key], next];
+      else flags[key] = next;
       index += 1;
     }
   }
   return { positionals, flags };
+}
+
+function flagValues(value) {
+  if (value === undefined) return [];
+  return Array.isArray(value) ? value : [value];
 }
 
 function print(value, asJson) {
@@ -74,7 +96,7 @@ function render(value) {
 
 async function runProjectCommand(command, targetPath, flags) {
   if (command === 'inspect') return inspectProject(targetPath);
-  if (command === 'adopt') {
+  if (command === 'adopt' || command === 'init') {
     const report = await inspectProject(targetPath);
     if (flags.apply) return adoptProject(report);
     return {
@@ -86,6 +108,7 @@ async function runProjectCommand(command, targetPath, flags) {
     };
   }
   if (command === 'resume') return resumeProject(targetPath);
+  if (command === 'run') return runAutonomous(targetPath, { maxSteps: flags['max-steps'], execute: Boolean(flags.execute) });
   if (command === 'verify') {
     const root = path.resolve(targetPath);
     return flags.execute ? verifyProject(root) : previewVerification(root);
@@ -94,6 +117,22 @@ async function runProjectCommand(command, targetPath, flags) {
   if (command === 'doctor') return { inspection: await inspectProject(targetPath), providers: providerStatus() };
   if (command === 'skills') return { skills: await listSkills(targetPath) };
   if (command === 'architecture') return auditArchitecture(targetPath);
+  if (command === 'validate') return validateProjectMetadata(path.resolve(targetPath));
+  if (command === 'migrate') {
+    const targets = await migrationTargets(targetPath);
+    return migrateFiles(targets, { apply: Boolean(flags.apply) });
+  }
+  if (command === 'workspace') {
+    if (!flags.init) return inspectWorkspace(targetPath);
+    const repositories = flagValues(flags.repository).map((value) => {
+      const separator = value.indexOf('=');
+      if (separator <= 0 || separator === value.length - 1) throw new Error('--repository must use id=relative-path.');
+      return { id: value.slice(0, separator), path: value.slice(separator + 1) };
+    });
+    return initializeWorkspace(targetPath, repositories, { apply: Boolean(flags.apply) });
+  }
+  if (command === 'workspace-verify') return verifyWorkspace(targetPath, { execute: Boolean(flags.execute) });
+  if (command === 'integration-queue') return listIntegrationQueue(path.resolve(targetPath));
   throw new Error(`Unknown command: ${command}`);
 }
 
@@ -113,9 +152,24 @@ async function runDelegate(positionals, flags) {
     role: flags.role,
     task: flags.task,
     access: flags.access || 'read-only',
+    allowedPaths: flagValues(flags['allowed-path']),
+    allowedCommands: flagValues(flags['allowed-command']),
   });
   if (!flags.execute) return { packetPath: packet.packetPath, provider: packet.provider, execute: false };
   return { packetPath: packet.packetPath, provider: packet.provider, execute: true, result: executeDelegation(packet) };
+}
+
+async function runDelegateResult(positionals, flags) {
+  const taskId = positionals[1];
+  if (!taskId || !flags.file) throw new Error('Usage: hafez delegate-result <task-id> --file <result.json> [--path <path>]');
+  const rawResult = await readFile(path.resolve(flags.file), 'utf8');
+  return ingestDelegationResult(path.resolve(flags.path || '.'), taskId, rawResult);
+}
+
+async function runDelegationStatus(positionals, flags) {
+  const taskId = positionals[1];
+  if (!taskId) throw new Error('Usage: hafez delegation-status <task-id> [--path <path>]');
+  return checkIntegrationReadiness(path.resolve(flags.path || '.'), taskId);
 }
 
 export async function main(argv) {
@@ -126,13 +180,15 @@ export async function main(argv) {
     return;
   }
   if (command === 'version' || command === '--version') {
-    console.log('0.1.2');
+    console.log('0.2.0');
     return;
   }
 
   let result;
   if (command === 'plan') result = await runPlan(positionals, flags);
   else if (command === 'delegate') result = await runDelegate(positionals, flags);
+  else if (command === 'delegate-result') result = await runDelegateResult(positionals, flags);
+  else if (command === 'delegation-status') result = await runDelegationStatus(positionals, flags);
   else result = await runProjectCommand(command, positionals[1] || flags.path || '.', flags);
   print(result, Boolean(flags.json));
 }

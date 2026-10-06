@@ -1,0 +1,5 @@
+interface:
+  display_name: "Hafez Workspace"
+  short_description: "Coordinate any multi-repository software product"
+  brand_color: "#0F766E"
+  default_prompt: "Use $hafez-workspace to inspect these repositories as one product without inferring relationships from their names."

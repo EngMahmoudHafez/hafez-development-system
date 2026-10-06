@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
-import { mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -23,11 +23,32 @@ test('CLI supports adopt, plan, resume, handoff, and dry-run delegation', async 
   invoke(['adopt', '.', '--apply'], root);
   const planned = invoke(['plan', 'S-01', 'Account onboarding'], root);
   const resumed = invoke(['resume', '.'], root);
+  const run = invoke(['run', '.', '--max-steps', '3'], root);
   const handoff = invoke(['handoff', '.'], root);
   const delegated = invoke(['delegate', 'codex', '--role', 'reviewer', '--task', 'Review onboarding'], root);
 
   assert.equal(planned.activeSlice, 'S-01');
   assert.equal(resumed.activeSlice, 'S-01');
+  assert.equal(run.reason, 'action-queued');
+  assert.equal(run.actions[0].id, 'continue-active-slice');
   assert.ok(existsSync(handoff.filePath));
   assert.ok(existsSync(delegated.packetPath));
+});
+
+test('CLI supports first-run validation, migrations, and generic workspaces', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'hds-cli-v2-'));
+  await mkdir(path.join(root, 'member'));
+  await writeFile(path.join(root, 'package.json'), JSON.stringify({ name: 'generic-product' }));
+
+  const preview = invoke(['init', '.'], root);
+  assert.equal(preview.apply, false);
+  invoke(['init', '.', '--apply'], root);
+  assert.equal(invoke(['validate', '.'], root).valid, true);
+  assert.equal(invoke(['migrate', '.'], root).changed, 0);
+
+  const workspacePreview = invoke(['workspace', '.', '--init', '--repository', 'member=member'], root);
+  assert.equal(workspacePreview.apply, false);
+  invoke(['workspace', '.', '--init', '--repository', 'member=member', '--apply'], root);
+  const workspace = invoke(['workspace', '.'], root);
+  assert.deepEqual(workspace.repositories.map((repository) => repository.id), ['member']);
 });

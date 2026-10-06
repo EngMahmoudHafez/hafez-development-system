@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hafez.dev/schemas/delegation-result.schema.json",
+  "title": "HDS delegation result",
+  "type": "object",
+  "required": ["schemaVersion", "taskId", "provider", "status", "baseRevision", "worktreeRevision", "summary", "changedFiles", "commandsRun", "commits", "verification", "risks", "blockers", "nextAction"],
+  "properties": {
+    "schemaVersion": { "const": "hds-delegation-result/v1" },
+    "taskId": { "type": "string", "minLength": 1 },
+    "provider": { "type": "string", "minLength": 1 },
+    "status": { "enum": ["completed", "blocked", "failed"] },
+    "baseRevision": { "type": "string", "minLength": 1 },
+    "worktreeRevision": { "type": "string", "minLength": 1 },
+    "summary": { "type": "string", "minLength": 1 },
+    "changedFiles": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+    "commandsRun": { "type": "array", "items": { "type": "string" } },
+    "commits": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+    "verification": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["command", "status"],
+        "properties": {
+          "command": { "type": "string", "minLength": 1 },
+          "status": { "enum": ["passed", "failed", "skipped"] }
+        },
+        "additionalProperties": false
+      }
+    },
+    "risks": { "type": "array", "items": { "type": "string" } },
+    "blockers": { "type": "array", "items": { "type": "string" } },
+    "nextAction": { "type": "string", "minLength": 1 }
+  },
+  "additionalProperties": false
+}

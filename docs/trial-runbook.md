@@ -1,109 +1,100 @@
-# End-to-end pilot runbook
+# End-to-end acceptance runbook
 
-This runbook tests HDS against the education platform without changing its normal working checkout.
-Use dedicated Git worktrees so the pilot can be discarded or compared safely.
+This runbook is intentionally project-neutral. Replace every placeholder with repositories you have
+explicitly chosen for the test. A path or project name shown in documentation is never authorization
+to inspect or modify it.
 
-## 1. Validate HDS itself
+## 1. Validate Hafez
 
 ```bash
-cd /home/hafez/Storage/freelance/hafez-development-system
-npm install
+cd /absolute/path/to/hafez-development-system
+npm ci
 npm run validate
+npm run test:package
 node bin/hafez.mjs doctor . --json
 ```
 
-Optionally expose the CLI for the current user with `npm link`. Otherwise use the absolute
-`node /home/hafez/Storage/freelance/hafez-development-system/bin/hafez.mjs` command below.
+## 2. Select safe fixtures
 
-## 2. Create isolated pilot worktrees
-
-First confirm both source repositories are clean. Then create one pilot checkout for each repository:
+Prefer disposable repositories created specifically for acceptance testing. If you choose an existing
+repository, confirm its working tree is clean and create an isolated worktree yourself. Record:
 
 ```bash
-git -C /home/hafez/Storage/elryad/education-platform-pro-backend status --short
-git -C /home/hafez/Storage/elryad/education-platform-pro-frontend status --short
-
-git -C /home/hafez/Storage/elryad/education-platform-pro-backend \
-  worktree add /home/hafez/Storage/elryad/education-platform-pro-backend-hds-pilot \
-  -b pilot/hds-backend
-
-git -C /home/hafez/Storage/elryad/education-platform-pro-frontend \
-  worktree add /home/hafez/Storage/elryad/education-platform-pro-frontend-hds-pilot \
-  -b pilot/hds-frontend
+export HAFEZ_BIN=/absolute/path/to/hafez-development-system/bin/hafez.mjs
+export FIXTURE_REPO=/absolute/path/to/explicitly-selected-fixture
 ```
 
-Stop if either source checkout is unexpectedly dirty and account for that work before creating the pilot.
+Do not reuse these variable names for system paths or credentials.
 
-## 3. Inspect, adopt, and audit
+## 3. Inspect before writing
 
 ```bash
-HAFEZ=/home/hafez/Storage/freelance/hafez-development-system/bin/hafez.mjs
-BACKEND=/home/hafez/Storage/elryad/education-platform-pro-backend-hds-pilot
-FRONTEND=/home/hafez/Storage/elryad/education-platform-pro-frontend-hds-pilot
-
-node "$HAFEZ" inspect "$BACKEND" --json
-node "$HAFEZ" architecture "$BACKEND" --json
-node "$HAFEZ" adopt "$BACKEND" --json
-node "$HAFEZ" adopt "$BACKEND" --apply --json
-
-node "$HAFEZ" inspect "$FRONTEND" --json
-node "$HAFEZ" adopt "$FRONTEND" --json
-node "$HAFEZ" adopt "$FRONTEND" --apply --json
+node "$HAFEZ_BIN" inspect "$FIXTURE_REPO" --json
+node "$HAFEZ_BIN" init "$FIXTURE_REPO" --json
 ```
 
-Review and commit only the generated `.hafez/`, `docs/hafez/`, and missing `AGENTS.md` files.
-For the backend, keep `policies.architectureProfile` set to `laravel-domain-slices-v1`.
-
-## 4. Prepare one real vertical slice
-
-Choose a small capability that crosses API and UI, such as viewing a trainer's public profile.
-Give the same slice identifier to both repositories:
+Confirm the detected stack, Git state, suggested gates, and allowed adoption writes. Then adopt only
+the fixture you selected:
 
 ```bash
-node "$HAFEZ" plan S-PILOT-01 "View trainer public profile" --path "$BACKEND" --json
-node "$HAFEZ" plan S-PILOT-01 "View trainer public profile" --path "$FRONTEND" --json
+node "$HAFEZ_BIN" init "$FIXTURE_REPO" --apply --json
+node "$HAFEZ_BIN" validate "$FIXTURE_REPO" --json
 ```
 
-Fill the generated slice documents with numbered business rules, acceptance criteria, open questions,
-the API contract owner, and observable end-to-end behavior before implementation.
-
-## 5. Run the agent autonomously
-
-Start the coding agent in the backend pilot with this task:
-
-```text
-Resume S-PILOT-01 using Hafez. Enforce laravel-domain-slices-v1 and the local Laravel skill.
-Continue through implementation, tests, architecture review, verification, and repair without asking
-for routine confirmation. Pause only if a decision boundary in docs/hafez/autonomy.md is reached.
-Record evidence and create a handoff before stopping.
-```
-
-Use the corresponding Nuxt/Vue instruction in the frontend pilot. Do not let two write-capable agents
-share a worktree. Read-only reviewers may inspect a stable revision.
-
-## 6. Verify and resume
-
-Preview commands before executing them:
+## 4. Exercise the lifecycle
 
 ```bash
-node "$HAFEZ" verify "$BACKEND" --json
-node "$HAFEZ" verify "$BACKEND" --execute --json
-node "$HAFEZ" architecture "$BACKEND" --json
-node "$HAFEZ" handoff "$BACKEND" --json
-node "$HAFEZ" resume "$BACKEND" --json
-
-node "$HAFEZ" verify "$FRONTEND" --json
-node "$HAFEZ" verify "$FRONTEND" --execute --json
-node "$HAFEZ" handoff "$FRONTEND" --json
-node "$HAFEZ" resume "$FRONTEND" --json
+node "$HAFEZ_BIN" plan S-01 "Acceptance fixture capability" --path "$FIXTURE_REPO" --json
+node "$HAFEZ_BIN" run "$FIXTURE_REPO" --max-steps 8 --json
+node "$HAFEZ_BIN" verify "$FIXTURE_REPO" --json
+node "$HAFEZ_BIN" verify "$FIXTURE_REPO" --execute --json
+node "$HAFEZ_BIN" handoff "$FIXTURE_REPO" --json
+node "$HAFEZ_BIN" resume "$FIXTURE_REPO" --json
 ```
 
-The pilot passes when required gates are green, the backend structural architecture audit passes and
-its manual review is completed, OpenAPI has zero diff after generation, the UI uses the generated contract, both
-handoffs identify the next safe action, and a fresh session can resume from repository state alone.
+The run passes when a fresh session can recover the same active slice, source revision, gate evidence,
+blockers, and next safe action without chat history.
 
-## 7. Test a real decision boundary
+## 5. Exercise a workspace when needed
 
-Add one intentionally unresolved product question to the slice, for example whether a hidden trainer
-returns `404` or `403`. The agent should pause, persist that exact question, and avoid inventing the
-product decision. After recording the answer, resume the same slice and verify it again.
+Use this only when the chosen fixture genuinely contains multiple repositories:
+
+```bash
+export FIXTURE_WORKSPACE=/absolute/path/to/explicitly-selected-workspace
+
+node "$HAFEZ_BIN" workspace "$FIXTURE_WORKSPACE" --init \
+  --repository first=repositories/first \
+  --repository second=repositories/second --json
+```
+
+Review the member list, apply it, then add contract edges only from observed evidence or an explicit
+decision. Verify that missing members and artifacts are reported without changing member repositories.
+
+## 6. Exercise isolated delegation
+
+Commit the adopted fixture so its integration checkout is clean. Prepare one writer with a narrow
+scope; do not use a paid provider for automated CI acceptance:
+
+```bash
+node "$HAFEZ_BIN" delegate codex \
+  --path "$FIXTURE_REPO" \
+  --role implementer \
+  --task "Change only the selected fixture documentation and return structured evidence." \
+  --access write-worktree \
+  --allowed-path docs \
+  --allowed-command "npm test" --json
+```
+
+The acceptance suite may simulate the result locally. It must prove one-writer reservation, base SHA,
+path scope, clean commits, exact result matching, and passing verification before readiness.
+
+## 7. Test decision boundaries
+
+Record one unresolved product question and verify `hafez run` pauses. Also test one failed or
+unavailable gate and one next action requiring publishing or production authority. Hafez must not
+invent the decision, convert the gate to success, or perform the external action.
+
+## 8. Clean up
+
+Remove only the disposable worktrees and fixtures created for this run. Never use a broad recursive
+delete target or infer cleanup targets from a repository name.

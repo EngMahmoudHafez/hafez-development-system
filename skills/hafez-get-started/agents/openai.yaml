@@ -1,0 +1,5 @@
+interface:
+  display_name: "Hafez Get Started"
+  short_description: "Set up Hafez safely for any software project"
+  brand_color: "#0F766E"
+  default_prompt: "Use $hafez-get-started to inspect this project and recommend the safest Hafez setup."

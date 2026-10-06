@@ -1,21 +1,26 @@
 {
   "name": "hafez-development-system",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Skills-first project lifecycle plugin with a deterministic CLI for recovery, verification, and delegation.",
   "type": "module",
   "bin": {
     "hafez": "./bin/hafez.mjs",
     "hds": "./bin/hafez.mjs"
   },
-  "files": [
+    "files": [
     ".codex-plugin/plugin.json",
+    "assets/",
     "bin/",
+    "CHANGELOG.md",
     "docs/architecture.md",
     "docs/integrations/",
     "docs/providers.md",
     "docs/roadmap.md",
+    "docs/releasing.md",
     "docs/skills.md",
+    "docs/threat-model.md",
     "docs/trial-runbook.md",
+    "docs/workspaces.md",
     "hooks/",
     "integrations/superpowers.lock.json",
     "plugin.json",
@@ -27,10 +32,14 @@
   ],
   "scripts": {
     "test": "node --test",
+    "test:coverage": "node --test --experimental-test-coverage",
+    "test:package": "node scripts/package-acceptance.mjs",
     "lint": "node scripts/check-syntax.mjs",
     "validate:json": "node scripts/validate-json.mjs",
+    "validate:evals": "node scripts/validate-evals.mjs",
+    "validate:release": "node scripts/check-release-version.mjs",
     "validate:skills": "node scripts/validate-skills.mjs",
-    "validate": "npm run lint && npm run validate:json && npm test && npm run validate:skills"
+    "validate": "npm run lint && npm run validate:json && npm test && npm run validate:skills && npm run validate:evals && npm run validate:release"
   },
   "engines": {
     "node": ">=20"

@@ -30,6 +30,9 @@
 مهارة `hafez` تفهم المقصود وتنتقل تلقائيًا بين inspect وadopt وresume وplan وverify
 وhandoff، وتستدعي مهارة Laravel أو Nuxt/Vue عند الحاجة.
 
+أسماء ومسارات المشاريع الموجودة في الشرح أمثلة فقط. Hafez لا يختار مشروعًا أو علاقة بين
+repositories اعتمادًا على الاسم.
+
 ## دورة العمل
 
 ```text
@@ -117,6 +120,49 @@ dependencies. راجع أي Skill قبل تفعيلها لأنها تعمل بص
 - مهارات Nuxt/Vue لربط الواجهات بعقد OpenAPI مولّد.
 - تفويض منضبط لمزودين مختلفين بدون تخزين الحسابات أو الأسرار.
 
+## أول تشغيل
+
+من داخل المشروع المقصود:
+
+```bash
+hafez init .             # معاينة بدون كتابة
+hafez init . --apply     # إنشاء حالة Hafez فقط
+hafez run .              # عرض الخطوة الآمنة التالية
+hafez run . --execute    # تنفيذ gates وhandoff الحتمية فقط
+```
+
+في وضع الـPlugin أو Skills ينفذ الـhost agent مهام التخطيط والكود ثم يعيد الدورة إلى أن يظهر قرار
+حقيقي. الـCLI المستقل لا يدّعي أنه موديل ذكاء اصطناعي؛ ينفذ العمليات الحتمية ويتوقف عند المهمة التي
+تحتاج Agent.
+
+## أكثر من Repository
+
+يتم تعريف الأعضاء صراحة، وليس من أسماء المجلدات:
+
+```bash
+hafez workspace /path/to/product --init \
+  --repository service=repositories/service \
+  --repository client=repositories/client
+
+# بعد المراجعة
+hafez workspace /path/to/product --init \
+  --repository service=repositories/service \
+  --repository client=repositories/client --apply
+```
+
+يسجل `.hafez/workspace.json` منتج العقود والمستهلكين ومسارات artifacts. أي أسماء في المثال قابلة
+للتغيير بالكامل.
+
+## التحقق والترحيل
+
+```bash
+hafez validate .
+hafez migrate .
+hafez migrate . --apply
+```
+
+الترحيل Dry-run افتراضيًا، ولا يخترع معلومات ناقصة لإجبار الملف على اجتياز الـschema.
+
 ## الاستمرار بدون أسئلة روتينية
 
 المشاريع المتبناة تستخدم `continue-until-decision`: يستطيع الوكيل تنفيذ التعديلات الآمنة داخل النطاق،
@@ -124,6 +170,10 @@ dependencies. راجع أي Skill قبل تفعيلها لأنها تعمل بص
 
 يتوقف فقط عند قرار منتج أو معمارية يغيّر السلوك، أو صلاحيات وبيانات سرية، أو production، أو نشر ودفع
 وتواصل خارجي، أو عملية مدمرة. لو توقفت الجلسة بسبب limit يمكن لجلسة جديدة استخدام `hafez resume`.
+
+التفويض الكتابي ينشئ worktree مستقلًا وwriter reservation واحدًا، ويسجل base revision والمسارات
+والأوامر المسموحة، ثم يرفض اعتبار النتيجة جاهزة للدمج ما لم تطابق Git والأدلة. يظل الدمج النهائي
+لمتكامل واحد. Kimi وAntigravity يعملان كـtask packets إلى أن تتوفر لهما طبقة عزل خارجية صلبة.
 
 ## معمارية Laravel
 
@@ -143,3 +193,6 @@ hafez architecture /path/to/laravel-project --json
 مثل brainstorming وTDD وdebugging، بينما Hafez يدير حالة المشروع والاستئناف والعقود والتفويض والتحقق.
 
 ابدأ من [دليل التجربة الكاملة](docs/trial-runbook.md). المشروع تحت ترخيص [MIT](LICENSE).
+
+الإصدار الحالي `0.2.0` Preview ويحتوي على 12 Skill، onboarding، schema validation، migrations،
+bounded runner، worktree delegation، workspace متعدد المستودعات، واختبارات وإصدارات آلية.

@@ -1,25 +1,38 @@
 name: Bug report
-description: Report reproducible HDS behavior
+description: Report reproducible Hafez behavior that is unsafe or incorrect
 title: "[Bug]: "
 labels: [bug]
 body:
   - type: textarea
-    id: summary
+    id: outcome
     attributes:
-      label: Summary
+      label: Observed behavior
+      description: Redact credentials, provider output, and private repository content.
     validations:
       required: true
   - type: textarea
-    id: reproduction
+    id: expected
     attributes:
-      label: Reproduction
-      description: Include redacted commands and a minimal project shape.
+      label: Expected behavior
     validations:
       required: true
   - type: textarea
-    id: environment
+    id: reproduce
     attributes:
-      label: Environment
-      description: HDS, Node.js, OS, stack, and provider versions. Do not include tokens.
+      label: Minimal reproduction
+      description: Include Hafez version, operating system, Node version, and safe commands.
+    validations:
+      required: true
+  - type: dropdown
+    id: impact
+    attributes:
+      label: Impact
+      options:
+        - Incorrect recommendation
+        - State or migration failure
+        - Delegation or isolation failure
+        - Verification false result
+        - Installation or packaging failure
+        - Other
     validations:
       required: true
