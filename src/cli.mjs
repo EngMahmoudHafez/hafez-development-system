@@ -7,6 +7,7 @@ import { previewVerification, verifyProject } from './core/verifier.mjs';
 import { createHandoff } from './core/handoff.mjs';
 import { executeDelegation, prepareDelegation, providerStatus } from './core/providers.mjs';
 import { listSkills } from './core/skill-registry.mjs';
+import { auditArchitecture } from './core/architecture.mjs';
 
 const help = `Hafez Development System
 
@@ -20,6 +21,7 @@ Usage:
   hafez delegate <provider> --role <role> --task <task> [--execute] [--path <path>]
   hafez doctor [path] [--json]
   hafez skills [path] [--json]
+  hafez architecture [path] [--json]
 
 Providers:
   codex/openai, claude, kimi, gemini, antigravity, zed
@@ -91,6 +93,7 @@ async function runProjectCommand(command, targetPath, flags) {
   if (command === 'handoff') return createHandoff(path.resolve(targetPath));
   if (command === 'doctor') return { inspection: await inspectProject(targetPath), providers: providerStatus() };
   if (command === 'skills') return { skills: await listSkills(targetPath) };
+  if (command === 'architecture') return auditArchitecture(targetPath);
   throw new Error(`Unknown command: ${command}`);
 }
 

@@ -29,7 +29,28 @@
         "additionalProperties": false
       }
     },
-    "policies": { "type": "object" }
+    "policies": {
+      "type": "object",
+      "required": ["planning", "requireEvidence", "writeDelegationRequiresWorktree", "serializedPaths"],
+      "properties": {
+        "planning": { "type": "string" },
+        "requireEvidence": { "type": "boolean" },
+        "writeDelegationRequiresWorktree": { "type": "boolean" },
+        "architectureProfile": { "type": ["string", "null"] },
+        "serializedPaths": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "autonomy": {
+          "type": "object",
+          "required": ["mode", "continueWithoutApproval", "pauseWhen"],
+          "properties": {
+            "mode": { "const": "continue-until-decision" },
+            "continueWithoutApproval": { "type": "array", "items": { "type": "string" } },
+            "pauseWhen": { "type": "array", "items": { "type": "string" } }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    }
   },
   "additionalProperties": false
 }

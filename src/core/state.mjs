@@ -15,18 +15,44 @@ export function hafezPaths(root) {
   };
 }
 
+function autonomyPolicy() {
+  return {
+    mode: 'continue-until-decision',
+    continueWithoutApproval: [
+      'inspect and read project files',
+      'make in-scope reversible code changes',
+      'run local quality gates and repair failures caused by the active task',
+      'update plans, state, evidence, and handoffs',
+    ],
+    pauseWhen: [
+      'a product or architecture choice materially changes user-visible behavior',
+      'credentials, production access, payment, publishing, or external communication is required',
+      'a destructive or difficult-to-recover operation is required',
+      'the requested scope conflicts with repository policy or cannot be verified safely',
+    ],
+  };
+}
+
+function projectPolicies(stacks) {
+  const laravel = stacks.includes('laravel');
+  return {
+    planning: 'vertical-slices',
+    requireEvidence: true,
+    writeDelegationRequiresWorktree: true,
+    architectureProfile: laravel ? 'laravel-domain-slices-v1' : null,
+    serializedPaths: laravel ? ['routes/api.php', 'database/seeders/DatabaseSeeder.php'] : [],
+    autonomy: autonomyPolicy(),
+  };
+}
+
 function projectManifest(report) {
+  const name = path.basename(report.root);
   return {
     schemaVersion: 'hds-project/v1',
-    project: { id: slugify(path.basename(report.root)), name: path.basename(report.root) },
+    project: { id: slugify(name), name },
     adapters: report.stacks,
     gates: report.suggestedGates,
-    policies: {
-      planning: 'vertical-slices',
-      requireEvidence: true,
-      writeDelegationRequiresWorktree: true,
-      serializedPaths: [],
-    },
+    policies: projectPolicies(report.stacks),
   };
 }
 
@@ -48,7 +74,7 @@ function workflowState(report) {
 }
 
 function agentsTemplate() {
-  return `# Project guidance\n\n- Read .hafez/state.json before planning or editing.\n- Use docs/hafez/slices for business rules and acceptance criteria.\n- Keep changes inside the active slice.\n- Do not declare completion without recorded verification evidence.\n- Use isolated worktrees for parallel write-capable agents and one integrator for shared files.\n`;
+  return `# Project guidance\n\n- Read .hafez/state.json before planning or editing.\n- Read .hafez/project.json for architecture, autonomy, and verification policy.\n- Use docs/hafez/slices for business rules and acceptance criteria.\n- Keep changes inside the active slice.\n- Continue through implementation, local verification, and repair without asking for routine confirmation.\n- Pause only at a decision boundary listed in docs/hafez/autonomy.md.\n- Do not declare completion without recorded verification evidence.\n- Use isolated worktrees for parallel write-capable agents and one integrator for shared files.\n`;
 }
 
 async function createDocumentation(root) {
@@ -56,6 +82,7 @@ async function createDocumentation(root) {
   const documents = [
     [path.join(docs, 'README.md'), '# Project operating record\n\nThis directory stores architecture, decisions, slices, handoffs, and runbooks used to resume work without chat history.\n'],
     [path.join(docs, 'architecture.md'), '# Architecture\n\nDocument the current system boundaries and dependencies here. Prefer observed facts over desired future structure.\n'],
+    [path.join(docs, 'autonomy.md'), '# Autonomy and decision boundaries\n\nThe agent should continue through in-scope implementation, tests, and repairs without asking for routine confirmation.\n\nPause for the user only when a product or architecture choice materially changes behavior; credentials, production access, payment, publishing, or external communication is required; an operation is destructive or difficult to recover; or the requested scope conflicts with project policy and cannot be resolved safely.\n\nWhen paused, save current evidence and the exact decision needed in `.hafez/state.json` and create a handoff.\n'],
     [path.join(docs, 'decisions', 'README.md'), '# Decisions\n\nRecord durable architecture decisions as numbered ADRs.\n'],
     [path.join(docs, 'slices', 'README.md'), '# Slices\n\nEach slice defines an end-user capability, rules, acceptance criteria, work units, and verification.\n'],
     [path.join(docs, 'handoffs', 'README.md'), '# Handoffs\n\nHandoffs record evidence, blockers, risks, and the next safe action.\n'],

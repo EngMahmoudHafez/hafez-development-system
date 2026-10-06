@@ -13,6 +13,8 @@ This repository ships a portable plugin, reusable skills, and a dependency-free 
 - Never store secret values. Record environment variable names only.
 - A skipped or unavailable quality gate is never a passed gate.
 - Write-capable delegation requires an isolated worktree and a single integrator.
+- Continue through in-scope implementation, local verification, and repairs without asking for routine confirmation.
+- Pause only for a material product/architecture decision, missing credentials or production authority, external publication/payment/communication, or a destructive operation.
 - Run `npm run validate` after changing production code or skills.
 
 ## Code style

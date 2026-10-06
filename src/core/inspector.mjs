@@ -53,6 +53,10 @@ async function detectGates(root, stacks) {
   if (stacks.includes('laravel') && !gates.some((gate) => gate.id === 'php-test') && fileExists(path.join(root, 'phpunit.xml'))) {
     gates.push({ id: 'php-tests', command: ['php', 'artisan', 'test'], required: true });
   }
+  if (stacks.includes('laravel') && composerManifest.scripts?.['api:generate'] && fileExists(path.join(root, 'openapi.json'))) {
+    gates.push({ id: 'php-openapi-generate', command: ['composer', 'api:generate'], required: true });
+    gates.push({ id: 'php-openapi-sync', command: ['git', 'diff', '--exit-code', '--', 'openapi.json'], required: true });
+  }
   return gates;
 }
 

@@ -17,6 +17,7 @@ It does not replace your framework, coding agent, or engineering judgement. It c
 - Zed integration as an editor/ACP host, not a model provider.
 - Optional, version-pinned compatibility with Superpowers.
 - Laravel and Nuxt/Vue delivery adapters.
+- A Laravel `laravel-domain-slices-v1` architecture audit and explicit continue-until-decision policy.
 
 Write-capable multi-provider delegation is intentionally not automated in this release. It requires managed worktrees, path ownership, and an integration queue; see [the roadmap](docs/roadmap.md).
 
@@ -49,6 +50,7 @@ hafez adopt . --apply
 hafez resume .
 hafez plan S-01 "First user capability"
 hafez skills .
+hafez architecture /path/to/laravel-project
 ```
 
 Run project-defined gates and create a durable handoff:
@@ -114,3 +116,6 @@ npm run validate
 ```
 
 The project follows MIT licensing, DCO sign-off, and evidence-first contributions. Read [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and [GOVERNANCE.md](GOVERNANCE.md).
+
+To exercise the complete lifecycle against isolated copies of the reference backend and frontend, use
+[the end-to-end pilot runbook](docs/trial-runbook.md).

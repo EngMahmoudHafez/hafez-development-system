@@ -22,6 +22,22 @@
     "planning": "vertical-slices",
     "requireEvidence": true,
     "writeDelegationRequiresWorktree": true,
-    "serializedPaths": []
+    "architectureProfile": null,
+    "serializedPaths": [],
+    "autonomy": {
+      "mode": "continue-until-decision",
+      "continueWithoutApproval": [
+        "inspect and read project files",
+        "make in-scope reversible code changes",
+        "run local quality gates and repair failures caused by the active task",
+        "update plans, state, evidence, and handoffs"
+      ],
+      "pauseWhen": [
+        "a product or architecture choice materially changes user-visible behavior",
+        "credentials, production access, payment, publishing, or external communication is required",
+        "a destructive or difficult-to-recover operation is required",
+        "the requested scope conflicts with repository policy or cannot be verified safely"
+      ]
+    }
   }
 }
