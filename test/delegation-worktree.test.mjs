@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
-import { checkIntegrationReadiness, ingestDelegationResult, listIntegrationQueue, releaseWriterReservation } from '../src/core/delegation.mjs';
+import { abortDelegation, checkIntegrationReadiness, ingestDelegationResult, listIntegrationQueue, releaseWriterReservation } from '../src/core/delegation.mjs';
 import { inspectProject } from '../src/core/inspector.mjs';
 import { prepareDelegation } from '../src/core/providers.mjs';
 import { adoptProject } from '../src/core/state.mjs';
@@ -94,4 +94,40 @@ test('write delegation rejects unsafe scope declarations', async () => {
     }),
     /must stay inside/,
   );
+});
+
+
+test('interrupted write delegation stays visible and can be safely aborted', async () => {
+  const root = await managedRepository();
+  const packet = await prepareDelegation(root, {
+    provider: 'codex',
+    role: 'implementer',
+    task: 'Start work but simulate an interrupted session.',
+    access: 'write-worktree',
+    allowedPaths: ['docs'],
+    allowedCommands: ['node --test'],
+  });
+
+  const queue = await listIntegrationQueue(root);
+  assert.deepEqual(queue.items.map((item) => [item.taskId, item.status, item.ready]), [
+    [packet.id, 'pending', false],
+  ]);
+  assert.ok(queue.items[0].reasons.includes('Structured delegation result is missing.'));
+
+  const aborted = await abortDelegation(root, packet.id);
+  assert.equal(aborted.aborted, true);
+  assert.equal(aborted.worktreeRemoved, true);
+  assert.equal(aborted.reservationReleased, true);
+  assert.deepEqual((await listIntegrationQueue(root)).items, []);
+
+  const replacement = await prepareDelegation(root, {
+    provider: 'claude',
+    role: 'implementer',
+    task: 'Replacement writer after interruption cleanup.',
+    access: 'write-worktree',
+    allowedPaths: ['docs'],
+    allowedCommands: ['node --test'],
+  });
+  assert.ok(replacement.reservation.id);
+  await abortDelegation(root, replacement.id);
 });
