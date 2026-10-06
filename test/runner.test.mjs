@@ -2,10 +2,17 @@ import assert from 'node:assert/strict';
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 import { inspectProject } from '../src/core/inspector.mjs';
 import { runAutonomous } from '../src/core/runner.mjs';
 import { adoptProject, loadProjectState, saveState } from '../src/core/state.mjs';
+
+function git(root, ...args) {
+  const result = spawnSync('git', args, { cwd: root, encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+  return result.stdout.trim();
+}
 
 async function adoptedProject() {
   const root = await mkdtemp(path.join(os.tmpdir(), 'hds-runner-'));
@@ -152,4 +159,28 @@ test('execute mode runs declared gates and creates a handoff after success', asy
   assert.equal(result.reason, 'handoff-created');
   assert.deepEqual(result.actions.map((action) => action.id), ['preview-verification', 'create-handoff']);
   assert.ok(result.actions.every((action) => action.autoExecuted));
+});
+
+
+test('execute mode verifies dirty work once and then creates a handoff instead of looping', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'hds-runner-dirty-'));
+  git(root, 'init', '-q');
+  git(root, 'config', 'user.name', 'Hafez Tests');
+  git(root, 'config', 'user.email', 'hafez-tests@example.invalid');
+  await writeFile(path.join(root, 'package.json'), JSON.stringify({
+    name: 'dirty-runner-fixture',
+    scripts: { test: 'node -e "process.exit(0)"' },
+  }, null, 2));
+  await adoptProject(await inspectProject(root));
+  git(root, 'add', '.');
+  git(root, 'commit', '-qm', 'fixture');
+
+  await writeFile(path.join(root, 'feature.txt'), 'uncommitted but verified\n');
+
+  const result = await runAutonomous(root, { execute: true, maxSteps: 8 });
+
+  assert.equal(result.status, 'completed');
+  assert.equal(result.reason, 'handoff-created');
+  assert.deepEqual(result.actions.map((action) => action.id), ['preview-verification', 'create-handoff']);
+  assert.equal(result.actions.filter((action) => action.id.includes('verification')).length, 1);
 });
