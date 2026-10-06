@@ -51,3 +51,48 @@ test('workspace rejects inferred or escaping paths and unknown contract members'
 
   await assert.rejects(() => inspectWorkspace(root), /unknown repository/);
 });
+
+
+test('backend and frontend workspace requires real contract artifacts before readiness', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'hds-workspace-contract-'));
+  const backend = path.join(root, 'backend');
+  const frontend = path.join(root, 'frontend');
+  await mkdir(backend, { recursive: true });
+  await mkdir(path.join(frontend, 'generated'), { recursive: true });
+  await writeFile(path.join(backend, 'artisan'), '');
+  await writeFile(path.join(frontend, 'package.json'), JSON.stringify({
+    name: 'frontend',
+    dependencies: { vue: '^3.0.0' },
+  }));
+
+  await initializeWorkspace(root, [
+    { id: 'backend', path: 'backend' },
+    { id: 'frontend', path: 'frontend' },
+  ], { apply: true });
+
+  const manifestPath = path.join(root, '.hafez', 'workspace.json');
+  const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+  manifest.contracts = [{
+    id: 'public-api',
+    producer: { repository: 'backend', path: 'openapi.json' },
+    consumers: [{ repository: 'frontend', path: 'generated/api-client.ts' }],
+  }];
+  manifest.gates = [{
+    id: 'contract-compatible',
+    command: [process.execPath, '-e', 'process.exit(0)'],
+    required: true,
+  }];
+  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+
+  const missing = await verifyWorkspace(root, { execute: true });
+  assert.equal(missing.ready, false);
+  assert.deepEqual(missing.missingArtifacts.map((item) => item.path).sort(), ['generated/api-client.ts', 'openapi.json']);
+
+  await writeFile(path.join(backend, 'openapi.json'), '{}\n');
+  await writeFile(path.join(frontend, 'generated', 'api-client.ts'), 'export {};\n');
+
+  const ready = await verifyWorkspace(root, { execute: true });
+  assert.equal(ready.ready, true);
+  assert.deepEqual(ready.missingArtifacts, []);
+  assert.equal(ready.gates[0].status, 'passed');
+});
