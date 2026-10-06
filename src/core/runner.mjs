@@ -181,7 +181,6 @@ function unverifiedGateIds(project, state) {
 
 function chooseAction(resume, managed) {
   const { project, state } = managed;
-  if (resume.git.dirty) return dirtyWorkAction(state, project);
   if (resume.staleRevision) {
     return agentAction(
       'reconcile-project-state',
@@ -189,6 +188,7 @@ function chooseAction(resume, managed) {
       'read-only-analysis',
     );
   }
+  if (resume.git.dirty) return dirtyWorkAction(state, project);
 
   const pendingGateIds = unverifiedGateIds(project, state);
   if (pendingGateIds.length > 0 || resume.workflowState === 'verifying') {
