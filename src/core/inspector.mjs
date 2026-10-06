@@ -83,9 +83,26 @@ function detectDocumentation(root) {
   };
 }
 
-function detectEngineering(root) {
+async function findColocatedTest(root) {
+  const queue = [root];
+  while (queue.length) {
+    const directory = queue.pop();
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      if (entry.isDirectory() && !ignoredDirectories.has(entry.name)) queue.push(path.join(directory, entry.name));
+      if (entry.isFile() && /\.(test|spec)\.[^.]+$/.test(entry.name)) return path.join(directory, entry.name);
+    }
+  }
+  return null;
+}
+
+async function detectEngineering(root) {
+  const conventionalTestDirectory = ['tests', 'test', '__tests__']
+    .map((name) => path.join(root, name))
+    .find(fileExists);
+  const testPath = conventionalTestDirectory ?? await findColocatedTest(root);
   return {
-    tests: ['tests', 'test', '__tests__'].some((name) => fileExists(path.join(root, name))),
+    tests: Boolean(testPath),
+    testPath,
     ci: fileExists(path.join(root, '.github', 'workflows')),
     docker: ['Dockerfile', 'docker-compose.yml', 'compose.yaml'].some((name) => fileExists(path.join(root, name))),
     hafez: fileExists(path.join(root, '.hafez', 'state.json')),
@@ -109,7 +126,7 @@ function buildEvidence(root, docs, engineering, stacks) {
   return [
     { kind: 'stack', value: stacks, confidence: stacks.length ? 1 : 0.2 },
     { kind: 'project-guidance', path: path.join(root, 'AGENTS.md'), present: docs.agents, confidence: 1 },
-    { kind: 'tests', path: firstExisting(root, ['tests', 'test', '__tests__']), present: engineering.tests, confidence: 0.9 },
+    { kind: 'tests', path: engineering.testPath ?? firstExisting(root, ['tests', 'test', '__tests__']), present: engineering.tests, confidence: 0.9 },
     { kind: 'ci', path: path.join(root, '.github', 'workflows'), present: engineering.ci, confidence: 1 },
   ];
 }
@@ -118,7 +135,7 @@ export async function inspectProject(inputPath = '.') {
   const root = path.resolve(inputPath);
   const stacks = await detectStacks(root);
   const docs = detectDocumentation(root);
-  const engineering = detectEngineering(root);
+  const engineering = await detectEngineering(root);
   const git = inspectGit(root);
   const sourceFiles = await countSourceFiles(root);
   const suggestedGates = await detectGates(root, stacks);
