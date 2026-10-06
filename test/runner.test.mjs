@@ -19,6 +19,12 @@ async function updateState(root, update) {
   await saveState(root, managed.state);
 }
 
+async function declareGate(root, gate) {
+  const managed = await loadProjectState(root);
+  managed.project.gates = [gate];
+  await writeFile(managed.paths.project, `${JSON.stringify(managed.project, null, 2)}\n`);
+}
+
 test('runner is read-only by default and queues one bounded safe action', async () => {
   const root = await adoptedProject();
   const before = await loadProjectState(root);
@@ -61,6 +67,7 @@ test('runner does not continue a workflow marked as blocked without a recorded r
 test('runner never treats failed, unavailable, or skipped gates as passed', async () => {
   for (const status of ['failed', 'unavailable', 'skipped']) {
     const root = await adoptedProject();
+    await declareGate(root, { id: 'test', command: [process.execPath, '-e', 'process.exit(0)'], required: true });
     await updateState(root, { gates: { test: status } });
 
     const result = await runAutonomous(root);
@@ -69,6 +76,18 @@ test('runner never treats failed, unavailable, or skipped gates as passed', asyn
     assert.equal(result.reason, 'quality-gates-not-passed');
     assert.deepEqual(result.gates, [{ id: 'test', status }]);
   }
+});
+
+test('runner ignores failures from explicitly optional gates', async () => {
+  const root = await adoptedProject();
+  await declareGate(root, { id: 'optional-check', command: [process.execPath, '-e', 'process.exit(1)'], required: false });
+  await updateState(root, { gates: { 'optional-check': 'failed' }, workflowState: 'ready' });
+
+  const result = await runAutonomous(root);
+
+  assert.equal(result.status, 'ready');
+  assert.equal(result.reason, 'action-queued');
+  assert.notEqual(result.reason, 'quality-gates-not-passed');
 });
 
 test('runner pauses at explicit decision and authority boundaries', async () => {
