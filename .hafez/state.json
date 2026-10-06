@@ -1,14 +1,16 @@
 {
   "schemaVersion": "hds-state/v1",
-  "updatedAt": "2026-10-06T14:13:55.546Z",
-  "workflowState": "adopted",
+  "updatedAt": "2026-10-06T14:19:34.954Z",
+  "workflowState": "handed-off",
   "currentFocus": "delivery",
   "confidence": 0.8,
   "activeSlice": null,
-  "lastKnownGoodRevision": null,
-  "nextSafeAction": "Review and verify the current uncommitted work before starting another slice.",
+  "lastKnownGoodRevision": "db803a1170d695c99d988021fe0c8980c5fdff29",
+  "nextSafeAction": "Create a handoff or plan the next slice.",
   "blockers": [],
   "openQuestions": [],
-  "gates": {},
-  "lastHandoff": null
+  "gates": {
+    "project-validate": "passed"
+  },
+  "lastHandoff": "docs/hafez/handoffs/2026-10-06T14-19-34-954Z.md"
 }
