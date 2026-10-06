@@ -7,7 +7,7 @@ const failures = [];
 
 for (const skillName of skillNames) {
   const skillPath = path.join(root, skillName, 'SKILL.md');
-  const content = await readFile(skillPath, 'utf8');
+  const content = (await readFile(skillPath, 'utf8')).replace(/\r\n/g, '\n');
   if (!content.startsWith('---\n')) failures.push(`${skillName}: missing frontmatter`);
   if (!content.includes(`name: ${skillName}`)) failures.push(`${skillName}: name mismatch`);
   if (!content.match(/description:\s*[^\n\[]/)) failures.push(`${skillName}: missing description`);
