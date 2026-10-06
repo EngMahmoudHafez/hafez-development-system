@@ -184,3 +184,31 @@ test('execute mode verifies dirty work once and then creates a handoff instead o
   assert.deepEqual(result.actions.map((action) => action.id), ['preview-verification', 'create-handoff']);
   assert.equal(result.actions.filter((action) => action.id.includes('verification')).length, 1);
 });
+
+
+test('execute mode can recover after a failed gate when repaired code makes the worktree dirty', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'hds-runner-repair-'));
+  git(root, 'init', '-q');
+  git(root, 'config', 'user.name', 'Hafez Tests');
+  git(root, 'config', 'user.email', 'hafez-tests@example.invalid');
+  await writeFile(path.join(root, 'package.json'), JSON.stringify({
+    name: 'repair-runner-fixture',
+    scripts: { test: 'node -e "process.exit(1)"' },
+  }, null, 2));
+  await adoptProject(await inspectProject(root));
+  git(root, 'add', '.');
+  git(root, 'commit', '-qm', 'fixture');
+
+  const failed = await runAutonomous(root, { execute: true, maxSteps: 8 });
+  assert.equal(failed.status, 'blocked');
+
+  await writeFile(path.join(root, 'package.json'), JSON.stringify({
+    name: 'repair-runner-fixture',
+    scripts: { test: 'node -e "process.exit(0)"' },
+  }, null, 2));
+
+  const recovered = await runAutonomous(root, { execute: true, maxSteps: 8 });
+  assert.equal(recovered.status, 'completed');
+  assert.equal(recovered.reason, 'handoff-created');
+  assert.deepEqual(recovered.actions.map((action) => action.id), ['verify-current-work', 'create-handoff']);
+});
