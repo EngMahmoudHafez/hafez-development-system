@@ -212,3 +212,33 @@ test('execute mode can recover after a failed gate when repaired code makes the 
   assert.equal(recovered.reason, 'handoff-created');
   assert.deepEqual(recovered.actions.map((action) => action.id), ['verify-current-work', 'create-handoff']);
 });
+
+
+test('stale committed source takes priority over verifying newer dirty work', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'hds-runner-stale-dirty-'));
+  git(root, 'init', '-q');
+  git(root, 'config', 'user.name', 'Hafez Tests');
+  git(root, 'config', 'user.email', 'hafez-tests@example.invalid');
+  await writeFile(path.join(root, 'package.json'), JSON.stringify({
+    name: 'stale-dirty-fixture',
+    scripts: { test: 'node -e "process.exit(0)"' },
+  }, null, 2));
+  git(root, 'add', 'package.json');
+  git(root, 'commit', '-qm', 'feat: initial source');
+
+  await adoptProject(await inspectProject(root));
+  git(root, 'add', '.hafez', 'docs/hafez', 'AGENTS.md');
+  git(root, 'commit', '-qm', 'chore: adopt hafez');
+
+  await writeFile(path.join(root, 'source.mjs'), 'export const version = 2;\n');
+  git(root, 'add', 'source.mjs');
+  git(root, 'commit', '-qm', 'feat: advance source');
+
+  await writeFile(path.join(root, 'local-change.txt'), 'dirty change\n');
+
+  const result = await runAutonomous(root);
+
+  assert.equal(result.status, 'ready');
+  assert.equal(result.actions[0].id, 'reconcile-project-state');
+  assert.equal(result.actions[0].scope, 'read-only-analysis');
+});
