@@ -28,6 +28,10 @@ jobs:
           mkdir -p dist
           npm pack --pack-destination dist
           npm sbom --sbom-format cyclonedx > dist/hafez-development-system-${GITHUB_REF_NAME}-sbom.cdx.json
+          plugin_stage="$(mktemp -d)"
+          package_archive=(dist/*.tgz)
+          tar -xzf "${package_archive[0]}" -C "$plugin_stage"
+          (cd "$plugin_stage/package" && zip -q -r "$GITHUB_WORKSPACE/dist/hafez-development-system-${GITHUB_REF_NAME}-plugin.zip" .)
           cd dist
           sha256sum * > SHA256SUMS
       - uses: actions/attest-build-provenance@v2
