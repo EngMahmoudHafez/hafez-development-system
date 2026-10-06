@@ -52,3 +52,26 @@ test('CLI supports first-run validation, migrations, and generic workspaces', as
   const workspace = invoke(['workspace', '.'], root);
   assert.deepEqual(workspace.repositories.map((repository) => repository.id), ['member']);
 });
+
+
+test('CLI keeps Laravel architecture opt-in during adoption', async () => {
+  const legacyRoot = await mkdtemp(path.join(os.tmpdir(), 'hds-cli-laravel-legacy-'));
+  await writeFile(path.join(legacyRoot, 'artisan'), '');
+  await writeFile(path.join(legacyRoot, 'composer.json'), JSON.stringify({ name: 'legacy/app' }));
+
+  const legacyPreview = invoke(['init', '.'], legacyRoot);
+  assert.equal(legacyPreview.architectureProfile, null);
+  assert.equal(legacyPreview.recommendedArchitectureProfile, 'laravel-domain-slices-v1');
+  invoke(['init', '.', '--apply'], legacyRoot);
+
+  const legacyManifest = JSON.parse(await (await import('node:fs/promises')).readFile(path.join(legacyRoot, '.hafez', 'project.json'), 'utf8'));
+  assert.equal(legacyManifest.policies.architectureProfile, null);
+
+  const strictRoot = await mkdtemp(path.join(os.tmpdir(), 'hds-cli-laravel-strict-'));
+  await writeFile(path.join(strictRoot, 'artisan'), '');
+  await writeFile(path.join(strictRoot, 'composer.json'), JSON.stringify({ name: 'strict/app' }));
+  invoke(['init', '.', '--architecture-profile', 'laravel-domain-slices-v1', '--apply'], strictRoot);
+
+  const strictManifest = JSON.parse(await (await import('node:fs/promises')).readFile(path.join(strictRoot, '.hafez', 'project.json'), 'utf8'));
+  assert.equal(strictManifest.policies.architectureProfile, 'laravel-domain-slices-v1');
+});
