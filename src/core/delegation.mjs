@@ -207,19 +207,57 @@ export function hasWriterReservation(root) {
   return fileExists(path.join(hafezPaths(root).delegations, 'writer-reservation.json'));
 }
 
+export async function abortDelegation(root, taskId) {
+  const paths = delegationPaths(root, taskId);
+  const packet = await readJson(paths.packet, null);
+  if (!packet) throw new Error(`Delegation packet not found: ${taskId}`);
+  if (packet.access !== 'write-worktree') {
+    await unlink(paths.packet);
+    if (fileExists(paths.result)) await unlink(paths.result);
+    return { taskId, aborted: true, worktreeRemoved: false, reservationReleased: false };
+  }
+
+  const reservation = await readJson(paths.reservation, null);
+  if (!reservation || reservation.taskId !== packet.id || reservation.id !== packet.reservation?.id) {
+    throw new Error('Cannot abort write delegation because its writer reservation is missing or belongs to another task.');
+  }
+
+  if (packet.worktree?.path) {
+    const { discardManagedWorktree } = await import('../lib/git-worktrees.mjs');
+    discardManagedWorktree(root, packet.worktree.path);
+  }
+  await releaseWriterReservation(root, packet.id, reservation.id);
+  if (fileExists(paths.result)) await unlink(paths.result);
+  await unlink(paths.packet);
+  return {
+    taskId,
+    aborted: true,
+    worktreeRemoved: Boolean(packet.worktree?.path),
+    reservationReleased: true,
+  };
+}
+
 export async function listIntegrationQueue(root) {
   const directory = hafezPaths(root).delegations;
   if (!fileExists(directory)) return { root: path.resolve(root), items: [] };
   const entries = await readdir(directory, { withFileTypes: true });
-  const taskIds = entries
-    .filter((entry) => entry.isFile() && entry.name.endsWith('.result.json'))
-    .map((entry) => entry.name.slice(0, -'.result.json'.length))
+  const taskIds = [...new Set(entries
+    .filter((entry) => entry.isFile() && entry.name.endsWith('.json') && entry.name !== 'writer-reservation.json')
+    .map((entry) => entry.name.replace(/\.result\.json$/, '').replace(/\.json$/, '')))]
+    .filter((taskId) => TASK_ID_PATTERN.test(taskId))
     .sort();
   const items = [];
   for (const taskId of taskIds) {
-    const readiness = await checkIntegrationReadiness(root, taskId);
+    const packet = await readJson(delegationPacketPath(root, taskId), null);
     const result = await readJson(delegationResultPath(root, taskId), null);
-    items.push({ taskId, provider: result?.provider ?? null, status: result?.status ?? 'missing', ...readiness });
+    const readiness = await checkIntegrationReadiness(root, taskId);
+    items.push({
+      taskId,
+      provider: result?.provider ?? packet?.provider ?? null,
+      access: packet?.access ?? null,
+      status: result?.status ?? 'pending',
+      ...readiness,
+    });
   }
   return { root: path.resolve(root), items };
 }
