@@ -79,20 +79,24 @@ function recordedBoundary(resume, state, project) {
     });
   }
 
-  if (resume.workflowState === 'blocked') {
+  const requiredIds = requiredGateIds(project);
+  const gateStops = Object.entries(resume.gates)
+    .filter(([id, status]) => requiredIds.has(id) && ['failed', 'unavailable', 'skipped'].includes(status))
+    .map(([id, status]) => ({ id, status }));
+  const retryableAfterRepair = resume.git.dirty
+    && gateStops.length > 0
+    && gateStops.every((gate) => gate.status === 'failed');
+
+  if (resume.workflowState === 'blocked' && !retryableAfterRepair) {
     return stop('blocked', 'workflow-blocked', {
       decisionBoundary: 'The saved workflow is blocked; record or resolve its concrete blocker before continuing.',
     });
   }
 
-  const requiredIds = requiredGateIds(project);
-  const gateStops = Object.entries(resume.gates)
-    .filter(([id, status]) => requiredIds.has(id) && ['failed', 'unavailable', 'skipped'].includes(status))
-    .map(([id, status]) => ({ id, status }));
-  if (gateStops.length > 0) {
+  if (gateStops.length > 0 && !retryableAfterRepair) {
     return stop('blocked', 'quality-gates-not-passed', {
       gates: gateStops,
-      decisionBoundary: 'A failed, unavailable, or skipped gate is never treated as passed.',
+      decisionBoundary: 'A failed, unavailable, or skipped required gate is never treated as passed.',
     });
   }
 
