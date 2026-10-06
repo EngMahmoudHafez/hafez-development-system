@@ -19,7 +19,7 @@ function nulSeparated(output) {
 export function gitRepositoryState(root) {
   const repositoryRoot = runText('git', ['rev-parse', '--show-toplevel'], root);
   if (!repositoryRoot) throw new Error('Write-capable delegation requires a Git repository.');
-  if (realpathSync(repositoryRoot) !== realpathSync(root)) {
+  if (path.relative(realpathSync(repositoryRoot), realpathSync(root)) !== '') {
     throw new Error('Write-capable delegation must be prepared from the Git repository root.');
   }
 

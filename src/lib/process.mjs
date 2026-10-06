@@ -2,14 +2,25 @@ import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 
+function windowsCommandPath(command) {
+  if (path.isAbsolute(command)) return existsSync(command) ? command : null;
+  const lookup = spawnSync('where', [command], { encoding: 'utf8' });
+  if (lookup.status !== 0) return null;
+  return lookup.stdout.split(/\r?\n/).find(Boolean) ?? null;
+}
+
 export function commandExists(command) {
+  if (process.platform === 'win32') return Boolean(windowsCommandPath(command));
   if (path.isAbsolute(command)) return existsSync(command);
-  const locator = process.platform === 'win32' ? 'where' : 'which';
-  return spawnSync(locator, [command], { stdio: 'ignore' }).status === 0;
+  return spawnSync('which', [command], { stdio: 'ignore' }).status === 0;
 }
 
 export function run(command, args, options = {}) {
-  return spawnSync(command, args, {
+  const windowsPath = process.platform === 'win32' ? windowsCommandPath(command) : null;
+  const usesCommandShim = windowsPath && /\.(?:cmd|bat)$/i.test(windowsPath);
+  const executable = usesCommandShim ? (process.env.ComSpec || 'cmd.exe') : (windowsPath ?? command);
+  const executableArgs = usesCommandShim ? ['/d', '/s', '/c', windowsPath, ...args] : args;
+  return spawnSync(executable, executableArgs, {
     cwd: options.cwd,
     encoding: 'utf8',
     input: options.input,
