@@ -38,7 +38,7 @@ function workflowState(report) {
     currentFocus: report.inference.currentFocus,
     confidence: report.inference.confidence,
     activeSlice: null,
-    lastKnownGoodRevision: report.git.revision ?? null,
+    lastKnownGoodRevision: report.git.sourceRevision ?? report.git.revision ?? null,
     nextSafeAction: report.inference.nextSafeAction,
     blockers: [],
     openQuestions: [],

@@ -37,7 +37,10 @@ export async function verifyProject(root) {
   const allPassed = requiredResults.length > 0 && requiredResults.every((result) => result.status === 'passed');
   managed.state.workflowState = allPassed ? 'ready' : 'blocked';
   managed.state.nextSafeAction = allPassed ? 'Create a handoff or plan the next slice.' : 'Repair failed or unavailable required gates.';
-  if (allPassed) managed.state.lastKnownGoodRevision = inspectGit(root).revision ?? managed.state.lastKnownGoodRevision;
+  if (allPassed) {
+    const git = inspectGit(root);
+    managed.state.lastKnownGoodRevision = git.sourceRevision ?? git.revision ?? managed.state.lastKnownGoodRevision;
+  }
   await saveState(root, managed.state);
   return { evidencePath, allPassed, results };
 }

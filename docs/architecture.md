@@ -20,6 +20,9 @@ The core has no provider SDK dependency and stores only repository-owned metadat
 Delegation packets live under ignored `.hafez/delegations/` because task text and absolute local paths may be private. Durable conclusions belong in reviewed handoffs, not raw provider packets.
 
 Saved state is a snapshot, not the ultimate truth. Resume reconciles it with current Git and repository evidence.
+`lastKnownGoodRevision` tracks the latest verified source revision while excluding `.hafez/` and
+`docs/hafez/` metadata-only checkpoints. This keeps a committed verification record or handoff from
+making the source appear stale immediately after it is saved.
 
 ## Safety model
 

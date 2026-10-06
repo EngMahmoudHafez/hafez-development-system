@@ -13,10 +13,11 @@ function chooseNextAction(report, managed) {
 export async function resumeProject(inputPath = '.') {
   const report = await inspectProject(inputPath);
   const managed = await loadProjectState(report.root);
+  const currentSourceRevision = report.git.sourceRevision ?? report.git.revision;
   const staleRevision = Boolean(
     managed?.state.lastKnownGoodRevision
-      && report.git.revision
-      && managed.state.lastKnownGoodRevision !== report.git.revision,
+      && currentSourceRevision
+      && managed.state.lastKnownGoodRevision !== currentSourceRevision,
   );
 
   return {

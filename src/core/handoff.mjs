@@ -7,7 +7,7 @@ import { isoFileTimestamp } from '../lib/files.mjs';
 function renderHandoff(report, state) {
   const changed = report.git.changedFiles?.map((file) => `- ${file}`).join('\n') || '- None';
   const blockers = state.blockers?.map((item) => `- ${item.id ?? 'blocker'}: ${item.summary ?? JSON.stringify(item)}`).join('\n') || '- None';
-  return `# Project handoff\n\n- Generated: ${new Date().toISOString()}\n- Revision: ${report.git.revision ?? 'unknown'}\n- Branch: ${report.git.branch ?? 'unknown'}\n- Workflow state: ${state.workflowState}\n- Current focus: ${state.currentFocus}\n- Active slice: ${state.activeSlice ?? 'none'}\n\n## Changed files\n\n${changed}\n\n## Gates\n\n\`\`\`json\n${JSON.stringify(state.gates ?? {}, null, 2)}\n\`\`\`\n\n## Blockers\n\n${blockers}\n\n## Next safe action\n\n${state.nextSafeAction}\n`;
+  return `# Project handoff\n\n- Generated: ${new Date().toISOString()}\n- Repository revision: ${report.git.revision ?? 'unknown'}\n- Source revision: ${report.git.sourceRevision ?? report.git.revision ?? 'unknown'}\n- Branch: ${report.git.branch ?? 'unknown'}\n- Workflow state: ${state.workflowState}\n- Current focus: ${state.currentFocus}\n- Active slice: ${state.activeSlice ?? 'none'}\n\n## Changed files\n\n${changed}\n\n## Gates\n\n\`\`\`json\n${JSON.stringify(state.gates ?? {}, null, 2)}\n\`\`\`\n\n## Blockers\n\n${blockers}\n\n## Next safe action\n\n${state.nextSafeAction}\n`;
 }
 
 export async function createHandoff(root) {
