@@ -83,7 +83,7 @@ function recordedBoundary(resume, state, project) {
   const gateStops = Object.entries(resume.gates)
     .filter(([id, status]) => requiredIds.has(id) && ['failed', 'unavailable', 'skipped'].includes(status))
     .map(([id, status]) => ({ id, status }));
-  const retryableAfterRepair = resume.git.dirty
+  const retryableAfterRepair = resume.git.sourceDirty
     && gateStops.length > 0
     && gateStops.every((gate) => gate.status === 'failed');
 
@@ -188,7 +188,7 @@ function chooseAction(resume, managed) {
       'read-only-analysis',
     );
   }
-  if (resume.git.dirty) return dirtyWorkAction(state, project);
+  if (resume.git.sourceDirty) return dirtyWorkAction(state, project);
 
   const pendingGateIds = unverifiedGateIds(project, state);
   if (pendingGateIds.length > 0 || resume.workflowState === 'verifying') {
