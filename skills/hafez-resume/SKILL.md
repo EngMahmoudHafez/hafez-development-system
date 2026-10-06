@@ -5,7 +5,9 @@ description: Resume work in a Hafez-managed project by reconciling saved state w
 
 # Hafez Resume
 
-Run `hafez resume <path> --json` before continuing work.
+Run `hafez resume <path> --json` before continuing work when the CLI is available. In a skills-only
+installation, read `.hafez/project.json`, `.hafez/state.json`, the latest handoff, current Git status,
+and current gate evidence directly before selecting the next action.
 
 Report:
 

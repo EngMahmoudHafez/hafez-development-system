@@ -5,7 +5,10 @@ description: Run the project-defined quality gates, record durable evidence, and
 
 # Hafez Verify
 
-Run `hafez verify <path>` to preview the configured commands. After confirming they are appropriate for the repository, run `hafez verify <path> --execute`.
+Run `hafez verify <path>` to preview configured commands, then use `--execute`, when the CLI is
+available. In a skills-only installation, read the argument-array gates from `.hafez/project.json`,
+show them before first execution, run them without shell interpolation, and record equivalent bounded
+evidence under `.hafez/evidence/`.
 
 - Use commands declared in `.hafez/project.json` or a detected adapter; never invent a destructive verification command.
 - Record command, exit code, duration, and bounded output in `.hafez/evidence/`.

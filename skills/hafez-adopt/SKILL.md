@@ -5,7 +5,10 @@ description: Add resumable Hafez project state and operating documentation to an
 
 # Hafez Adopt
 
-Inspect first, show the user the inferred focus with `hafez adopt <path>`, then apply the reviewed writes with `hafez adopt <path> --apply`.
+Inspect first. With the CLI, show the inferred focus using `hafez adopt <path>`, then apply reviewed
+writes using `hafez adopt <path> --apply`. In a skills-only installation, preview the exact allowed
+paths and create the minimal state described in [references/minimal-state.md](references/minimal-state.md)
+only after the user asks to adopt the project.
 
 Adoption may create only `.hafez/`, `docs/hafez/`, and a missing root `AGENTS.md`. Preserve existing files and make repeated adoption idempotent. Do not install dependencies, run migrations, rewrite architecture, or modify application code.
 

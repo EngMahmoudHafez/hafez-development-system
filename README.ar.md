@@ -48,33 +48,64 @@
 Handoff قابل للاستئناف
 ```
 
-## التثبيت المحلي
+## التثبيت
 
-يتطلب Node.js 20 أو أحدث:
+### تثبيت الـSkills فقط — الاختيار المناسب لمعظم المستخدمين
 
-```bash
-git clone https://github.com/EngMahmoudHafez/hafez-development-system.git
-cd hafez-development-system
-npm install
-npm run validate
-```
-
-داخل Codex أو ChatGPT Work اطلب من المهارة المدمجة:
-
-```text
-Use $plugin-creator to add the existing plugin at /absolute/path/hafez-development-system
-to my personal marketplace so I can test it locally.
-```
-
-بعد تحديث التطبيق ثبّت **Hafez Development System** من مصدر Personal واختبره في محادثة جديدة.
-المشروع مجهز للنشر العام، لكنه لم يُنشر بعد في دليل الـplugins العام.
-
-لإتاحة محرك الأوامر محليًا:
+اعرض المهارات الموجودة قبل التثبيت:
 
 ```bash
-npm link
+npx skills add EngMahmoudHafez/hafez-development-system --list --full-depth
+```
+
+ثبّت الحزمة داخل المشروع الحالي أو على مستوى الجهاز:
+
+```bash
+npx skills add EngMahmoudHafez/hafez-development-system
+npx skills add EngMahmoudHafez/hafez-development-system --global
+```
+
+يمكنك تثبيت المدخل الرئيسي فقط لأداة معينة:
+
+```bash
+npx skills add EngMahmoudHafez/hafez-development-system --skill hafez --agent codex
+npx skills add EngMahmoudHafez/hafez-development-system --skill hafez-laravel --agent claude-code
+```
+
+للتحديث أو الإزالة:
+
+```bash
+npx skills update
+npx skills update --global
+npx skills remove hafez
+```
+
+### تثبيت المحرك الكامل
+
+على مستوى الجهاز:
+
+```bash
+npm install --global github:EngMahmoudHafez/hafez-development-system
 hafez doctor .
 ```
+
+أو داخل مشروع واحد:
+
+```bash
+npm install --save-dev github:EngMahmoudHafez/hafez-development-system
+npx hafez inspect . --json
+```
+
+نسخة Skills-only تعمل بدون executable؛ كل مهارة لديها fallback يستخدم أدوات الوكيل مباشرة. المحرك
+الكامل يضيف أوامر ثابتة للحالة والأدلة والـhandoffs.
+
+حزمة Skills-only تحتوي على Markdown ومراجع وبيانات YAML خفيفة فقط، بدون scripts تنفيذية داخل
+المهارات أو credentials أو MCP. المحرك الكامل الاختياري يضيف CLI مبنيًا على Node.js بدون runtime
+dependencies. راجع أي Skill قبل تفعيلها لأنها تعمل بصلاحيات الـagent المستضيف.
+
+المشروع مجهز أيضًا كـPlugin كامل لـCodex وChatGPT Work. أوامر GitHub ستعمل بعد نشر المستودع على
+الرابط المعلن. قبل النشر يمكن تجربة نفس الخطوات من النسخة المحلية باستخدام
+`npx skills add /absolute/path` و`npm install --global /absolute/path`.
 
 ## ماذا يضيف للمشروع؟
 

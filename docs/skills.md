@@ -1,5 +1,21 @@
 # Skill discovery and composition
 
+HDS can be installed as a portable Skills CLI package without the plugin or Node.js runtime:
+
+```bash
+# current project
+npx skills add EngMahmoudHafez/hafez-development-system
+
+# user-level installation
+npx skills add EngMahmoudHafez/hafez-development-system --global
+
+# one entry skill for one host
+npx skills add EngMahmoudHafez/hafez-development-system --skill hafez --agent codex
+```
+
+Skills-only mode uses the host agent's existing filesystem, Git, and command tools. Full-runtime mode
+adds the deterministic `hafez` executable, JSON schemas, automatic state hooks, and provider adapters.
+
 Run `hafez skills . --json` to inventory reusable workflows visible in the current environment. The command reads skill metadata only; it does not execute or install skills.
 
 HDS intentionally works with existing skills such as Laravel architecture, Nuxt/Vue delivery, clean-code review, test review, documentation review, Spec Kit, and Superpowers. It does not copy them into project state or assume they are trusted.

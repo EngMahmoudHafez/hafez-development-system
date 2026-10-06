@@ -5,7 +5,9 @@ description: Inspect an unfamiliar or partially built repository, infer its stac
 
 # Hafez Inspect
 
-Run `hafez inspect <path> --json` before planning changes in an unmanaged or unclear repository.
+Run `hafez inspect <path> --json` before planning changes in an unmanaged or unclear repository when
+the Hafez CLI is available. In a skills-only installation, perform the same checks with the agent's
+read-only filesystem, Git, and command tools and return the same evidence-first conclusion.
 
 - Keep the inspection read-only.
 - Separate observed facts from inferences and attach paths or command evidence.

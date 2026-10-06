@@ -5,7 +5,10 @@ description: Delegate bounded project work across Codex, Claude Code, Kimi Code,
 
 # Hafez Delegate
 
-Generate a task packet with `hafez delegate <provider> --role <role> --task <task>`. Execution is read-only by default.
+Generate a task packet with `hafez delegate <provider> --role <role> --task <task>` when the CLI is
+available. In a skills-only installation, construct the same packet from
+[references/task-packet.md](references/task-packet.md) and hand it to an available agent mechanism.
+Execution is read-only by default.
 
 - Delegate only work that can be independently verified.
 - Use scouts, reviewers, and researchers read-only.

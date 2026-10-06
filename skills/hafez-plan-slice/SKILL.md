@@ -5,7 +5,9 @@ description: Plan a vertical project slice with business rules, acceptance crite
 
 # Hafez Plan Slice
 
-Use `hafez plan <S-ID> <title>` to create the slice record, then complete it before implementation.
+Use `hafez plan <S-ID> <title>` to create the slice record when the CLI is available. In a skills-only
+installation, create `docs/hafez/slices/<S-ID>.md` directly using the same fields in
+[references/slice-schema.md](references/slice-schema.md), then complete it before implementation.
 
 - Define an end-user capability, not an infrastructure layer.
 - Number business rules and acceptance criteria.

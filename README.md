@@ -77,45 +77,66 @@ docs/hafez/
 
 ## Install
 
-### Local plugin development
+### Skills-only — recommended for most users
 
-Requires Node.js 20 or newer.
-
-```bash
-git clone https://github.com/EngMahmoudHafez/hafez-development-system.git
-cd hafez-development-system
-npm install
-npm run validate
-```
-
-In Codex or ChatGPT Work, use the built-in plugin creator to add this existing folder to your personal
-marketplace:
-
-```text
-Use $plugin-creator to add the existing plugin at /absolute/path/hafez-development-system
-to my personal marketplace so I can test it locally.
-```
-
-Refresh the desktop app, install **Hafez Development System** from the personal source, then test it
-in a new chat. Plugin hooks require the host's normal trust review.
-
-The project is prepared for the shared public plugin directory, but it is not published there yet.
-
-### CLI engine
-
-The plugin can guide workflows without requiring users to remember commands. Contributors and local
-automation can also expose the engine globally:
+Browse the package before installing:
 
 ```bash
-npm link
+npx skills add EngMahmoudHafez/hafez-development-system --list --full-depth
+```
+
+Install all Hafez skills into the current project:
+
+```bash
+npx skills add EngMahmoudHafez/hafez-development-system
+```
+
+Install globally for every project, or choose one agent and skill:
+
+```bash
+npx skills add EngMahmoudHafez/hafez-development-system --global
+npx skills add EngMahmoudHafez/hafez-development-system --skill hafez --agent codex
+npx skills add EngMahmoudHafez/hafez-development-system --skill hafez-laravel --agent claude-code
+```
+
+The Skills CLI supports Codex, Claude Code, Cursor, OpenCode, and other compatible agents. A
+skills-only installation does not require the Hafez executable; every workflow includes a direct-tool
+fallback.
+
+Update or remove installed skills with:
+
+```bash
+npx skills update
+npx skills update --global
+npx skills remove hafez
+```
+
+### Full runtime — skills plus deterministic state commands
+
+Add the runtime globally from GitHub:
+
+```bash
+npm install --global github:EngMahmoudHafez/hafez-development-system
 hafez doctor .
 ```
 
-Or run it without a global install:
+Or keep it inside one project:
 
 ```bash
-node /absolute/path/hafez-development-system/bin/hafez.mjs inspect . --json
+npm install --save-dev github:EngMahmoudHafez/hafez-development-system
+npx hafez inspect . --json
 ```
+
+### Full plugin — Codex and ChatGPT Work
+
+The root `plugin.json` packages all skills and the resumable-state hook. During local development,
+clone the repository, run `npm install && npm run validate`, then ask the built-in `$plugin-creator`
+to add that existing folder to your personal marketplace. Refresh the desktop app and test the plugin
+in a new chat. Hooks require the host's normal trust review.
+
+The GitHub and Skills CLI commands above become available after this repository is published at the
+declared URL. Until then, test the same flow from a local clone with `npx skills add /absolute/path`
+and `npm install --global /absolute/path`.
 
 ## The skill pack
 
@@ -134,6 +155,13 @@ node /absolute/path/hafez-development-system/bin/hafez.mjs inspect . --json
 
 Skills use progressive disclosure: the model first sees a short description, loads the selected
 workflow only when relevant, and reads detailed references only when that mode needs them.
+
+### Trust model
+
+The skills-only package contains Markdown instructions, references, and lightweight YAML metadata;
+it has no skill-bundled executable scripts, credentials, or MCP dependency. The optional full runtime
+adds an inspectable, dependency-free Node.js CLI and lifecycle hook. Review skills before enabling
+them because installed skills run with the permissions of the host agent.
 
 ## Laravel architecture profile
 
@@ -191,7 +219,7 @@ tests a real decision boundary, and proves that a fresh session can resume witho
 
 ## Project status
 
-Version `0.1.1` is an evidence-backed preview. It includes the portable Agent Plugin manifest, Codex
+Version `0.1.2` is an evidence-backed preview. It includes the portable Agent Plugin manifest, Codex
 compatibility manifest, ten skills, lifecycle hooks, the dependency-free Node.js CLI, tests, schemas,
 and open-source governance files.
 

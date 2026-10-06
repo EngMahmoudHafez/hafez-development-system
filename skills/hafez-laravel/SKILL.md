@@ -14,4 +14,6 @@ Run the repository's formatting, static analysis, tests, and contract-sync gates
 Read [references/laravel-baseline.md](references/laravel-baseline.md) for greenfield and adoption decision criteria.
 When the project policy selects `laravel-domain-slices-v1`, also read and enforce
 [references/domain-slices-v1.md](references/domain-slices-v1.md). Use `hafez architecture <path>`
-to identify structural gaps, then manually review the behavioral rules that static file checks cannot prove.
+to identify structural gaps when the CLI is available. In a skills-only installation, inspect the
+same required paths and gates from that reference directly, then manually review the behavioral rules
+that static file checks cannot prove.
