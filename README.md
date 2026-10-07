@@ -245,7 +245,8 @@ action from repository state.
 ## Providers and delegation
 
 Hafez routes capabilities, not accounts. Authentication, billing, and usage limits stay with each
-provider. Structured lead-owned work can also use an available Codex, Claude, or Gemini CLI as a
+provider. Independent read-only scouts can execute concurrently across different providers; tasks on
+the same provider and all write-capable work remain serialized. Structured lead-owned work can also use an available Codex, Claude, or Gemini CLI as a
 standalone lead fallback; if none is available, the active host model remains the lead. Read-only Codex and Claude adapters are available; Kimi and Antigravity writers require hard
 external isolation; Zed and Antigravity Desktop are treated as hosts rather than extra model quotas.
 
