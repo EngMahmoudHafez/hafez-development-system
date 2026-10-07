@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
-import { continueDelegation, decideDelegationContinuation, planDelegationTopology } from '../src/core/orchestrator.mjs';
+import { continueDelegation, decideDelegationContinuation, planDelegationTopology, runDelegationCycle } from '../src/core/orchestrator.mjs';
 import { ingestDelegationResult, listIntegrationQueue } from '../src/core/delegation.mjs';
 import { inspectProject } from '../src/core/inspector.mjs';
 import { prepareDelegation } from '../src/core/providers.mjs';
@@ -178,4 +178,109 @@ test('provider failures fail over to another available helper before escalating 
   assert.equal(decision.reason, 'provider-failure-failover');
   assert.equal(decision.nextProvider, 'claude');
   assert.equal(decision.nextTier, 'worker');
+});
+
+
+test('delegation cycle executes pending scout work and continues to evidence-ready without owner input', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'hds-orchestrator-cycle-'));
+  await adoptProject(await inspectProject(root));
+  const packet = await prepareDelegation(root, {
+    provider: 'codex',
+    role: 'scout',
+    task: 'Inspect the project for missing tests.',
+    access: 'read-only',
+    allowedPaths: [],
+    allowedCommands: [],
+    workerTier: 'scout',
+    attempt: 1,
+  });
+
+  const executePacket = async (current) => {
+    const result = {
+      schemaVersion: 'hds-delegation-result/v1',
+      taskId: current.id,
+      provider: current.provider,
+      status: 'completed',
+      baseRevision: current.baseRevision,
+      worktreeRevision: null,
+      summary: 'Found one missing regression test.',
+      changedFiles: [],
+      commandsRun: [],
+      commits: [],
+      verification: [],
+      risks: [],
+      blockers: [],
+      nextAction: 'report evidence to the lead',
+    };
+    await ingestDelegationResult(root, current.id, result);
+    return { status: 0, providerError: false, result, readiness: { ready: false, reasons: [] } };
+  };
+
+  const cycle = await runDelegationCycle(root, packet.id, { executePacket, maxSteps: 4 });
+
+  assert.equal(cycle.status, 'completed');
+  assert.equal(cycle.reason, 'scout-evidence-ready');
+  assert.equal(cycle.continuationRequired, true);
+  assert.deepEqual(cycle.trace.map((step) => step.action), ['continue', 'continue']);
+  assert.equal(cycle.trace[0].execution.resultStatus, 'completed');
+});
+
+test('delegation cycle automatically fails over after provider execution failure', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'hds-orchestrator-failover-cycle-'));
+  await adoptProject(await inspectProject(root));
+  const first = await prepareDelegation(root, {
+    provider: 'codex',
+    role: 'scout',
+    task: 'Inspect the project for a narrow issue.',
+    access: 'read-only',
+    allowedPaths: [],
+    allowedCommands: [],
+    workerTier: 'scout',
+    attempt: 1,
+  });
+
+  const providerStatusFixture = {
+    codex: { installed: true, configured: true, kind: 'agent-cli' },
+    claude: { installed: true, configured: true, kind: 'agent-cli' },
+    gemini: { installed: true, configured: true, kind: 'agent-cli' },
+  };
+  let executions = 0;
+  const executePacket = async (current) => {
+    executions += 1;
+    const failed = executions === 1;
+    const result = {
+      schemaVersion: 'hds-delegation-result/v1',
+      taskId: current.id,
+      provider: current.provider,
+      status: failed ? 'failed' : 'completed',
+      baseRevision: current.baseRevision,
+      worktreeRevision: null,
+      summary: failed ? 'Provider failed before returning evidence.' : 'Fallback provider returned evidence.',
+      changedFiles: [],
+      commandsRun: [],
+      commits: [],
+      verification: [],
+      risks: [],
+      blockers: failed ? ['Provider execution failed before a valid structured result was produced.'] : [],
+      nextAction: failed ? 'retry with another provider' : 'report evidence',
+      ...(failed ? { failureKind: 'provider' } : {}),
+    };
+    await ingestDelegationResult(root, current.id, result);
+    return { status: failed ? 1 : 0, providerError: failed, result, readiness: { ready: false, reasons: [] } };
+  };
+
+  const cycle = await runDelegationCycle(root, first.id, {
+    executePacket,
+    providerStatus: providerStatusFixture,
+    maxSteps: 8,
+  });
+
+  assert.equal(cycle.status, 'completed');
+  assert.equal(cycle.reason, 'scout-evidence-ready');
+  assert.equal(executions, 2);
+  const retryStep = cycle.trace.find((step) => step.action === 'retry');
+  assert.equal(retryStep.reason, 'provider-failure-failover');
+  const finalContext = await listIntegrationQueue(root);
+  const active = finalContext.items.find((item) => item.taskId === cycle.currentTaskId);
+  assert.equal(active.provider, 'gemini');
 });
