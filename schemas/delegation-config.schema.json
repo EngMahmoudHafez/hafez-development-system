@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hafez.dev/schemas/delegation-config.schema.json",
+  "title": "HDS delegation policy",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "defaultAccess",
+    "providers"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "hds-delegation/v1"
+    },
+    "defaultAccess": {
+      "enum": [
+        "read-only",
+        "write-worktree"
+      ]
+    },
+    "leadProvider": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "leadModel": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "autoReview": {
+      "type": "boolean"
+    },
+    "providers": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}
