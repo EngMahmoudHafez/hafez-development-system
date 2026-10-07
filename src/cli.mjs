@@ -10,11 +10,11 @@ import { executeDelegation, prepareDelegation, providerStatus } from './core/pro
 import { listSkills } from './core/skill-registry.mjs';
 import { auditArchitecture } from './core/architecture.mjs';
 import { runAutonomous } from './core/runner.mjs';
-import { planDelegationTopology } from './core/orchestrator.mjs';
+import { decideDelegationContinuation, planDelegationTopology } from './core/orchestrator.mjs';
 import { validateProjectMetadata } from './core/metadata-validator.mjs';
 import { migrateFiles, migrationTargets } from './core/migrations.mjs';
 import { initializeWorkspace, inspectWorkspace, verifyWorkspace } from './core/workspace.mjs';
-import { abortDelegation, checkIntegrationReadiness, ingestDelegationResult, integrateDelegation, listIntegrationQueue, recordDelegationReview } from './core/delegation.mjs';
+import { abortDelegation, checkIntegrationReadiness, ingestDelegationResult, integrateDelegation, listIntegrationQueue, readDelegationContext, recordDelegationReview } from './core/delegation.mjs';
 
 const help = `Hafez Development System
 
@@ -29,9 +29,10 @@ Usage:
   hafez verify [path] [--execute] [--json]
   hafez handoff [path] [--json]
   hafez delegate <provider> --role <role> --task <task> [--access read-only|write-worktree]
-                 [--allowed-path <path>] [--allowed-command <command>] [--worker-tier <tier>] [--model <model>] [--execute]
+                 [--allowed-path <path>] [--allowed-command <command>] [--worker-tier <tier>] [--model <model>] [--parent-task-id <id>] [--attempt <n>] [--execute]
   hafez delegate-result <task-id> --file <result.json> [--path <path>]
   hafez delegation-status <task-id> [--path <path>]
+  hafez delegation-next <task-id> [--path <path>]
   hafez delegation-review <task-id> --verdict approved|rejected --summary <text> [--reviewer <name>] [--path <path>]
   hafez delegation-integrate <task-id> [--path <path>]
   hafez delegation-abort <task-id> [--path <path>]
@@ -166,6 +167,8 @@ async function runDelegate(positionals, flags) {
     allowedCommands: flagValues(flags['allowed-command']),
     workerTier: flags['worker-tier'] || (flags.access === 'write-worktree' ? 'worker' : 'scout'),
     model: flags.model || null,
+    parentTaskId: flags['parent-task-id'] || null,
+    attempt: flags.attempt ? Number(flags.attempt) : 1,
   });
   if (!flags.execute) return { packetPath: packet.packetPath, provider: packet.provider, execute: false };
   return { packetPath: packet.packetPath, provider: packet.provider, execute: true, result: executeDelegation(packet) };
@@ -182,6 +185,14 @@ async function runDelegationStatus(positionals, flags) {
   const taskId = positionals[1];
   if (!taskId) throw new Error('Usage: hafez delegation-status <task-id> [--path <path>]');
   return checkIntegrationReadiness(path.resolve(flags.path || '.'), taskId);
+}
+
+async function runDelegationNext(positionals, flags) {
+  const taskId = positionals[1];
+  if (!taskId) throw new Error('Usage: hafez delegation-next <task-id> [--path <path>]');
+  const context = await readDelegationContext(path.resolve(flags.path || '.'), taskId);
+  if (!context.packet) throw new Error(`Delegation packet not found: ${taskId}`);
+  return decideDelegationContinuation(context.packet, context.result, context.review);
 }
 
 async function runDelegationReview(positionals, flags) {
@@ -225,6 +236,7 @@ export async function main(argv) {
   else if (command === 'delegate') result = await runDelegate(positionals, flags);
   else if (command === 'delegate-result') result = await runDelegateResult(positionals, flags);
   else if (command === 'delegation-status') result = await runDelegationStatus(positionals, flags);
+  else if (command === 'delegation-next') result = await runDelegationNext(positionals, flags);
   else if (command === 'delegation-review') result = await runDelegationReview(positionals, flags);
   else if (command === 'delegation-integrate') result = await runDelegationIntegrate(positionals, flags);
   else if (command === 'delegation-abort') result = await runDelegationAbort(positionals, flags);
