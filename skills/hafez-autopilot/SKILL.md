@@ -111,3 +111,10 @@ If Hafez reports `strategy-escalation-required`, do not ask the project owner. T
 - `lead`: the strongest available lead takes over the task directly, re-evaluates the assumptions and evidence, and changes strategy.
 
 A repeated result without new Git state, gate evidence, or slice progress is not progress. Do not keep retrying the same prompt or patch.
+
+
+## Standalone lead fallback
+
+When a structured work unit requires `workerTier: lead`, prefer the current host lead when it is actively orchestrating the project. In standalone CLI mode, if a configured Codex, Claude, or Gemini agent CLI is available, Hafez may dispatch that lead-owned unit automatically through the normal isolated delegation contract.
+
+Write-capable standalone lead work still uses a managed worktree, bounded paths/commands, verification, and an independent lead-review provider when one is available. If no standalone lead provider is usable, return the unit to the host lead without treating that as a project-owner decision.
