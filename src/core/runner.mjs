@@ -327,6 +327,13 @@ export async function runAutonomous(inputPath = '.', options = {}) {
       if (execute && transition.action.id === 'create-handoff') {
         transition.action.autoExecuted = true;
         transition.action.result = await createHandoff(root);
+        if (autoAdopt) {
+          const postHandoff = await loadProjectState(root);
+          if (postHandoff?.state.activeSlice) {
+            machine = { root, phase: 'resume', resume: null, managed: null, continuous: true };
+            continue;
+          }
+        }
         outcome = stop('completed', 'handoff-created', {
           nextSafeAction: transition.action.result.nextSafeAction,
         });
