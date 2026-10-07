@@ -464,3 +464,58 @@ test('failed verification keeps the completed-work slice active for technical re
   const slice = JSON.parse(await readFile(slicePath, 'utf8'));
   assert.equal(slice.status, 'in-progress');
 });
+
+
+test('autopilot activates the next known slice instead of stopping after the current milestone', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'hds-runner-next-slice-'));
+  await writeFile(path.join(root, 'package.json'), JSON.stringify({
+    name: 'next-slice-fixture',
+    scripts: { test: 'node -e "process.exit(0)"' },
+  }, null, 2));
+  await adoptProject(await inspectProject(root));
+  await writeStructuredSlice(root, [completedWorkUnit('WU-01')]);
+
+  const secondSlicePath = path.join(root, 'docs', 'hafez', 'slices', 'S-02-next-capability.json');
+  await writeFile(secondSlicePath, JSON.stringify({
+    schemaVersion: 'hds-slice/v1',
+    id: 'S-02',
+    title: 'Next capability',
+    objective: 'Continue delivery after S-01.',
+    status: 'planned',
+    businessRules: [],
+    acceptanceCriteria: ['Lead-owned decision is implemented from repository evidence.'],
+    dependencies: [],
+    decisions: [],
+    workUnits: [{
+      id: 'WU-02',
+      objective: 'Perform the next bounded lead-owned implementation step.',
+      role: 'lead',
+      dependencies: [],
+      risk: 'medium',
+      workerTier: 'lead',
+      access: 'read-only',
+      parallelSafe: false,
+      allowedPaths: [],
+      verification: [],
+      acceptanceCriteria: ['The lead completes the bounded step.'],
+      integrationNotes: '',
+      status: 'planned',
+    }],
+    verification: [],
+    openQuestions: [],
+  }, null, 2));
+
+  const result = await runAutonomous(root, { execute: true, autoAdopt: true, maxSteps: 20 });
+
+  assert.equal(result.status, 'ready');
+  assert.equal(result.reason, 'lead-action-required');
+  assert.ok(result.actions.some((action) => action.id === 'activate-next-slice'));
+  assert.equal(result.actions.at(-1).id, 'execute-lead-work-units');
+
+  const managed = await loadProjectState(root);
+  assert.equal(managed.state.activeSlice, 'S-02');
+  assert.equal(managed.state.workflowState, 'in-progress');
+
+  const second = JSON.parse(await readFile(secondSlicePath, 'utf8'));
+  assert.equal(second.status, 'in-progress');
+});
