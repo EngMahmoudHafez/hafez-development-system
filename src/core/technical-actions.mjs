@@ -104,3 +104,116 @@ export async function runTechnicalQuestionResolution(root, options = {}) {
     cycle,
   };
 }
+
+
+function commandText(command) {
+  return command.map((part) => {
+    const value = String(part);
+    return /\s/.test(value) ? JSON.stringify(value) : value;
+  }).join(' ');
+}
+
+export async function runTechnicalBlockerRecovery(root, options = {}) {
+  const managed = await loadProjectState(root);
+  if (!managed) throw new Error('Project is not adopted.');
+
+  const blockers = managed.state.blockers ?? [];
+  const ownerBlockers = ownerDecisionItems(blockers);
+  const technicalBlockers = blockers.filter((blocker) => !ownerBlockers.includes(blocker));
+
+  if (technicalBlockers.length === 0) {
+    return {
+      status: ownerBlockers.length > 0 ? 'paused' : 'completed',
+      reason: ownerBlockers.length > 0 ? 'owner-decision-required' : 'no-technical-blockers',
+      continuationRequired: ownerBlockers.length === 0,
+      ownerBlockers,
+    };
+  }
+
+  const status = options.providerStatus ?? providerStatus();
+  const provider = options.provider ?? selectLeadProvider(status, {
+    leadProvider: options.leadProvider ?? null,
+  });
+  if (!provider) {
+    return {
+      status: 'ready',
+      reason: 'no-lead-provider',
+      continuationRequired: true,
+      blockers: technicalBlockers,
+    };
+  }
+
+  const requiredCommands = (managed.project.gates ?? [])
+    .filter((gate) => gate.required)
+    .map((gate) => commandText(gate.command));
+  const allowedCommands = requiredCommands.length > 0 ? [...new Set(requiredCommands)] : ['git diff --check'];
+
+  const task = [
+    'Diagnose and repair the following non-material technical blockers.',
+    'Work only on reversible repository changes in the isolated worktree.',
+    'Do not weaken tests, disable checks, broaden ignore rules, alter product requirements, or make production/external changes.',
+    'If the repair requires a material product/architecture decision, credentials, destructive action, legal/privacy/compliance choice, or other owner authority, report it as a blocker instead of guessing.',
+    'Technical blockers:',
+    ...technicalBlockers.map((blocker, index) => `${index + 1}. ${questionText(blocker)}`),
+    'Use the smallest safe fix, add regression coverage when appropriate, and run the allowed verification commands.',
+  ].join('\n');
+
+  const packet = await prepareDelegation(root, {
+    provider,
+    role: 'lead-technical-recovery',
+    task,
+    access: 'write-worktree',
+    allowedPaths: ['.'],
+    allowedCommands,
+    workerTier: 'lead',
+    model: options.model ?? null,
+    attempt: 1,
+    reviewRequired: true,
+  });
+
+  const cycle = await runDelegationCycle(root, packet.id, {
+    maxSteps: options.maxSteps,
+    providerStatus: status,
+    leadProvider: options.reviewProvider ?? null,
+    leadModel: options.reviewModel ?? null,
+    executePacket: options.executePacket,
+    reviewPacket: options.reviewPacket,
+    integratePacket: options.integratePacket,
+    continueTask: options.continueTask,
+    verifyIntegration: options.verifyIntegration,
+  });
+
+  if (cycle.reason === 'owner-decision-required') {
+    return {
+      status: 'paused',
+      reason: 'owner-decision-required',
+      continuationRequired: false,
+      cycle,
+    };
+  }
+
+  if (cycle.reason !== 'delegation-integrated-and-verified') {
+    return {
+      status: 'ready',
+      reason: cycle.reason,
+      continuationRequired: true,
+      cycle,
+    };
+  }
+
+  const refreshed = await loadProjectState(root);
+  refreshed.state.blockers = ownerDecisionItems(refreshed.state.blockers ?? []);
+  refreshed.state.nextSafeAction = refreshed.state.activeSlice
+    ? `Continue ${refreshed.state.activeSlice} after verified technical recovery.`
+    : 'Continue from the verified technical recovery and choose the next safe project action.';
+  await saveState(root, refreshed.state);
+
+  return {
+    status: 'completed',
+    reason: 'technical-blockers-resolved',
+    continuationRequired: true,
+    provider,
+    taskId: cycle.currentTaskId,
+    cycle,
+  };
+}
