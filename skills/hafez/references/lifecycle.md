@@ -23,3 +23,20 @@ Focus may move backward when evidence changes. A deployed product can return to 
 Track status per capability and repository: `unknown`, `absent`, `specified`, `mocked`, `implemented`, `integrated`, `verified`, `released`, or `degraded`.
 
 Do not reduce these states to one project-completion percentage.
+
+
+## Continuous decision loop
+
+Autopilot treats recoverable technical uncertainty as work, not as a stopping boundary.
+
+Continue automatically through:
+- failed or unavailable technical gates that can be repaired locally;
+- provider failure and model retry/failover;
+- rejected delegated revisions;
+- worker → specialist → lead escalation;
+- non-material implementation questions that repository evidence can answer;
+- post-integration verification failures.
+
+Pause only for a project-owner decision that materially changes product/business behavior, architecture or public contracts, requires external authority/credentials, or is destructive/difficult to recover.
+
+When paused, the exact decision context is persisted in `.hafez/autopilot.json` so a fresh session does not need chat history to understand why the loop stopped.
