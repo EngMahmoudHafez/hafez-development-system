@@ -184,6 +184,8 @@ export async function prepareDelegation(root, options) {
     projectRoot: path.resolve(root),
     baseRevision: context.baseRevision,
     activeSlice: managed?.state.activeSlice ?? null,
+    parentTaskId: options.parentTaskId ?? null,
+    attempt: options.attempt ?? 1,
     task: options.task,
     allowedPaths: context.allowedPaths,
     allowedCommands: context.allowedCommands,
