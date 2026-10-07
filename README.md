@@ -87,7 +87,8 @@ hafez init . --apply     # create only Hafez state and operating docs
 hafez init . --architecture-profile laravel-domain-slices-v1 --apply
                          # explicitly opt in to the strict Laravel baseline
 hafez run .              # show one bounded next action
-hafez run . --execute    # execute deterministic gates/handoffs; pause before agent-owned work
+hafez run . --execute    # execute deterministic gates/handoffs
+hafez autopilot .        # safe auto-adopt + continuous host-agent loop
 ```
 
 `hafez run` is bounded and resumable. In plugin/skills mode the host agent performs queued planning
@@ -169,7 +170,10 @@ and `npm install --global /absolute/path`.
 | `hafez-plan-slice` | Planning one end-user capability across repositories |
 | `hafez-laravel` | Laravel domain modules, Actions, Policies, thin HTTP layers, and API gates |
 | `hafez-nuxt-vue` | Nuxt/Vue contracts, composables, mock-to-real wiring, RTL, and UI gates |
+| `hafez-autopilot` | Continuous lead-agent loop: adopt, plan, delegate, repair, review, verify, and continue |
+| `hafez-debug` | Evidence-first reproduce → repair → regression-test → reverify loop |
 | `hafez-delegate` | Bounded work for Codex, Claude, Kimi, Gemini, Antigravity, or Zed workflows |
+| `hafez-review` | Strong-model review and approval of delegated writes before integration |
 | `hafez-verify` | Required quality gates and durable evidence |
 | `hafez-handoff` | Safe stopping, ownership changes, blockers, and release checkpoints |
 | `hafez-workspace` | Explicit multi-repository members, contracts, and integration state |
@@ -226,8 +230,9 @@ provider. Read-only Codex and Claude adapters are available; Kimi and Antigravit
 external isolation; Zed and Antigravity Desktop are treated as hosts rather than extra model quotas.
 
 Write-capable task packets now create one managed detached worktree, one writer reservation, explicit
-path and command scopes, a base revision, and a structured result that must pass integration-readiness
-checks. Interrupted write tasks remain visible in `hafez integration-queue` as pending work. If a
+path and command scopes, a base revision, and a structured result. A write result is not integratable
+until a lead reviewer approves the exact delegated revision; `hafez delegation-integrate <task-id>`
+then performs the deterministic cherry-pick only after all readiness checks pass. Interrupted write tasks remain visible in `hafez integration-queue` as pending work. If a
 writer session is intentionally abandoned, `hafez delegation-abort <task-id>` removes its managed
 worktree and releases its reservation so a replacement writer can proceed safely. Hafez still leaves
 commit integration to one human or host-agent integrator. Kimi and Antigravity CLI execution stays
