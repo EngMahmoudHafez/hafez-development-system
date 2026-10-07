@@ -68,6 +68,13 @@ function requiresOwnerDecision(blockers = []) {
   return blockers.some((blocker) => ownerDecisionPatterns.some((pattern) => pattern.test(String(blocker))));
 }
 
+function alternativeProvider(packet, status = providerStatus()) {
+  const preference = packet.access === 'write-worktree'
+    ? ['codex', 'claude', 'gemini']
+    : ['gemini', 'codex', 'claude'];
+  return preference.find((provider) => provider !== packet.provider && usable(status[provider])) ?? null;
+}
+
 export function decideDelegationContinuation(packet, result = null, review = null, options = {}) {
   const maxAttemptsPerTier = Number.isSafeInteger(options.maxAttemptsPerTier) ? options.maxAttemptsPerTier : 2;
   const attempt = Number.isSafeInteger(packet?.attempt) ? packet.attempt : 1;
@@ -127,6 +134,19 @@ export function decideDelegationContinuation(packet, result = null, review = nul
   }
 
   if (['failed', 'blocked'].includes(result.status)) {
+    if (result.failureKind === 'provider') {
+      const fallbackProvider = alternativeProvider(packet, options.providerStatus);
+      if (fallbackProvider) {
+        return {
+          action: 'retry',
+          reason: 'provider-failure-failover',
+          ownerDecisionRequired: false,
+          nextTier: tier,
+          nextAttempt: attempt + 1,
+          nextProvider: fallbackProvider,
+        };
+      }
+    }
     if (attempt < maxAttemptsPerTier) {
       return {
         action: 'retry',
@@ -180,8 +200,11 @@ export async function continueDelegation(root, taskId, options = {}) {
   }
 
   const retired = await retireDelegation(root, taskId, decision.reason);
+  const provider = options.provider
+    ?? decision.nextProvider
+    ?? context.packet.provider;
   const packet = await prepareDelegation(root, {
-    provider: options.provider ?? context.packet.provider,
+    provider,
     role: context.packet.role,
     task: continuationTask(context.packet, context.result, context.review),
     access: context.packet.access,
