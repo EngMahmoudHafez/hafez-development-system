@@ -10,9 +10,11 @@ function serializeStatusWrite(root, operation) {
   const key = path.resolve(root);
   const previous = statusWriteQueues.get(key) ?? Promise.resolve();
   const next = previous.catch(() => {}).then(operation);
-  statusWriteQueues.set(key, next.finally(() => {
-    if (statusWriteQueues.get(key) === next) statusWriteQueues.delete(key);
-  }));
+  let queued;
+  queued = next.finally(() => {
+    if (statusWriteQueues.get(key) === queued) statusWriteQueues.delete(key);
+  });
+  statusWriteQueues.set(key, queued);
   return next;
 }
 
