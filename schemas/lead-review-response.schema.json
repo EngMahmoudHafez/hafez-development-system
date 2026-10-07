@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hafez.dev/schemas/lead-review-response.schema.json",
+  "title": "HDS standalone lead review response",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "verdict",
+    "summary",
+    "risks",
+    "requiredFixes"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "hds-lead-review-response/v1"
+    },
+    "verdict": {
+      "enum": [
+        "approved",
+        "rejected"
+      ]
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "risks": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "requiredFixes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": false
+}
