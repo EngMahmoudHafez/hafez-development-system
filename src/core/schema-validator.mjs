@@ -7,6 +7,7 @@ const schemaDirectory = fileURLToPath(new URL('../../schemas/', import.meta.url)
 const schemaFiles = {
   autopilot: 'autopilot.schema.json',
   capabilities: 'capabilities.schema.json',
+  'delegation-config': 'delegation-config.schema.json',
   'delegation-integration': 'delegation-integration.schema.json',
   'delegation-retirement': 'delegation-retirement.schema.json',
   'delegation-result': 'delegation-result.schema.json',
@@ -115,6 +116,18 @@ function referencedSchema(reference, rootSchema) {
 }
 
 function validateNode(value, schema, instancePath, errors, rootSchema) {
+  if (Array.isArray(schema.oneOf)) {
+    const attempts = schema.oneOf.map((candidate) => {
+      const candidateErrors = [];
+      validateNode(value, candidate, instancePath, candidateErrors, rootSchema);
+      return candidateErrors;
+    });
+    const matches = attempts.filter((candidateErrors) => candidateErrors.length === 0);
+    if (matches.length !== 1) {
+      addError(errors, instancePath, 'oneOf', matches.length === 0 ? 'must match exactly one allowed schema' : 'matches more than one allowed schema');
+    }
+    return;
+  }
   if (schema.$ref) {
     validateNode(value, referencedSchema(schema.$ref, rootSchema), instancePath, errors, rootSchema);
     return;
