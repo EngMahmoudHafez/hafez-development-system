@@ -3,42 +3,145 @@
   "$id": "https://hafez.dev/schemas/task-packet.schema.json",
   "title": "HDS delegation task packet",
   "type": "object",
-  "required": ["schemaVersion", "id", "provider", "role", "access", "projectRoot", "baseRevision", "task", "allowedPaths", "allowedCommands", "timeoutSeconds", "expectedOutput"],
+  "required": [
+    "schemaVersion",
+    "id",
+    "provider",
+    "role",
+    "access",
+    "projectRoot",
+    "baseRevision",
+    "task",
+    "allowedPaths",
+    "allowedCommands",
+    "timeoutSeconds",
+    "expectedOutput"
+  ],
   "properties": {
-    "schemaVersion": { "const": "hds-task-packet/v1" },
-    "id": { "type": "string" },
-    "provider": { "type": "string" },
-    "role": { "type": "string" },
-    "access": { "enum": ["read-only", "write-worktree"] },
-    "projectRoot": { "type": "string" },
-    "baseRevision": { "type": ["string", "null"] },
-    "activeSlice": { "type": ["string", "null"] },
-    "task": { "type": "string", "minLength": 1 },
-    "allowedPaths": { "type": "array", "items": { "type": "string" } },
-    "allowedCommands": { "type": "array", "items": { "type": "string" } },
-    "timeoutSeconds": { "type": "integer", "minimum": 1 },
-    "expectedOutput": { "type": "array", "items": { "type": "string" } },
+    "schemaVersion": {
+      "const": "hds-task-packet/v1"
+    },
+    "id": {
+      "type": "string"
+    },
+    "provider": {
+      "type": "string"
+    },
+    "role": {
+      "type": "string"
+    },
+    "access": {
+      "enum": [
+        "read-only",
+        "write-worktree"
+      ]
+    },
+    "projectRoot": {
+      "type": "string"
+    },
+    "baseRevision": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "activeSlice": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "task": {
+      "type": "string",
+      "minLength": 1
+    },
+    "allowedPaths": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "allowedCommands": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "timeoutSeconds": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "expectedOutput": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
     "worktree": {
-      "type": ["object", "null"],
+      "type": [
+        "object",
+        "null"
+      ],
       "properties": {
-        "path": { "type": "string", "minLength": 1 },
-        "head": { "type": "string", "minLength": 1 },
-        "mode": { "const": "detached" },
-        "managedBy": { "const": "hds" }
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "head": {
+          "type": "string",
+          "minLength": 1
+        },
+        "mode": {
+          "const": "detached"
+        },
+        "managedBy": {
+          "const": "hds"
+        }
       },
-      "required": ["path", "head", "mode", "managedBy"],
+      "required": [
+        "path",
+        "head",
+        "mode",
+        "managedBy"
+      ],
       "additionalProperties": false
     },
     "reservation": {
-      "type": ["object", "null"],
+      "type": [
+        "object",
+        "null"
+      ],
       "properties": {
-        "id": { "type": "string", "minLength": 1 },
-        "path": { "type": "string", "minLength": 1 }
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        }
       },
-      "required": ["id", "path"],
+      "required": [
+        "id",
+        "path"
+      ],
       "additionalProperties": false
     },
-    "packetPath": { "type": "string" }
+    "packetPath": {
+      "type": "string"
+    },
+    "workerTier": {
+      "type": "string",
+      "enum": [
+        "scout",
+        "worker",
+        "specialist",
+        "lead"
+      ]
+    },
+    "reviewRequired": {
+      "type": "boolean"
+    }
   },
   "additionalProperties": false
 }
