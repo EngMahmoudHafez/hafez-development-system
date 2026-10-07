@@ -1,0 +1,4 @@
+interface:
+  display_name: "Hafez — Database"
+  short_description: "Safe migrations, integrity, queries, and performance"
+  default_prompt: "Use $hafez-database to review this database change or performance issue, make the safest reversible improvement, and verify it with evidence."

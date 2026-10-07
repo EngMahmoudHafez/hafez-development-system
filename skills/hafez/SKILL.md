@@ -15,6 +15,9 @@ state, planning, verification, and handoff contracts directly.
 - "Continue" or "Pick up where we stopped" routes to resume.
 - "Keep going", "finish whatever is left", "fix errors and continue", or "run this project autonomously" routes to `hafez-autopilot`.
 - Reproducible failures route to `hafez-debug`; delegated writes route through `hafez-review` before integration.
+- Database schema, migration, integrity, query, or data-volume work routes to `hafez-database`.
+- API/OpenAPI/versioning/generated-client compatibility routes to `hafez-api-contract`.
+- Authentication, authorization, secrets, uploads, dependency, tenancy, or vulnerability review routes to `hafez-security`.
 - "Build this feature" routes to resume or adopt, then one vertical slice and its stack adapter.
 - Multi-part active slices route through `hafez-decompose` before write delegation so the lead can assign safe bounded work units.
 - "Is this ready?" routes to verification and an evidence-based readiness answer.
