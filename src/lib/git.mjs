@@ -13,14 +13,14 @@ export function inspectGit(root) {
   const status = statusExecution.status === 0 ? statusExecution.stdout.trimEnd() : '';
   const sourceStatusExecution = run(
     'git',
-    ['status', '--porcelain', '--', '.', ':(exclude).hafez/**', ':(exclude)docs/hafez/**'],
+    ['status', '--porcelain', '--', '.', ':(exclude).hafez/**', ':(exclude)docs/hafez/**', ':(exclude)AGENTS.md'],
     { cwd: root, timeout: 10_000 },
   );
   const sourceStatus = sourceStatusExecution.status === 0 ? sourceStatusExecution.stdout.trimEnd() : '';
   const revision = runText('git', ['rev-parse', 'HEAD'], root);
   const sourceRevision = runText(
     'git',
-    ['log', '-1', '--format=%H', '--', '.', ':(exclude).hafez/**', ':(exclude)docs/hafez/**'],
+    ['log', '-1', '--format=%H', '--', '.', ':(exclude).hafez/**', ':(exclude)docs/hafez/**', ':(exclude)AGENTS.md'],
     root,
   );
   return {
