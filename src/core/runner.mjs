@@ -3,6 +3,8 @@ import { resumeProject } from './resume.mjs';
 import { loadProjectState } from './state.mjs';
 import { verifyProject } from './verifier.mjs';
 import { createHandoff } from './handoff.mjs';
+import { inspectProject } from './inspector.mjs';
+import { adoptProject } from './state.mjs';
 
 const DEFAULT_MAX_STEPS = 8;
 const MAX_ALLOWED_STEPS = 100;
@@ -251,7 +253,16 @@ export async function runAutonomous(inputPath = '.', options = {}) {
   const root = path.resolve(inputPath);
   const maxSteps = parseMaxSteps(options.maxSteps);
   const execute = options.execute === true;
+  const autoAdopt = options.autoAdopt === true;
   const trace = [];
+  let adopted = null;
+
+  if (autoAdopt) {
+    const initialResume = await resumeProject(root);
+    if (!initialResume.managed) {
+      adopted = await adoptProject(await inspectProject(root));
+    }
+  }
   const actions = [];
   let machine = { root, phase: 'resume', resume: null, managed: null };
   let outcome = null;
@@ -296,7 +307,8 @@ export async function runAutonomous(inputPath = '.', options = {}) {
   return {
     schemaVersion: 'hds-run/v1',
     root,
-    mode: execute ? 'deterministic-execute' : 'read-only',
+    mode: autoAdopt ? 'autopilot' : (execute ? 'deterministic-execute' : 'read-only'),
+    adopted,
     maxSteps,
     stepsTaken: trace.length,
     ...outcome,
