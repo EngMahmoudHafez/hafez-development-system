@@ -32,13 +32,14 @@ function validateWorkUnitPolicies(context, units) {
       throw new Error(`Work unit ${unit.id}: high-risk work requires specialist or lead tier.`);
     }
     if (unit.access === 'write-worktree') {
-      if (!Array.isArray(unit.allowedPaths) || unit.allowedPaths.length === 0) {
+      const terminalHistory = unit.status === 'completed';
+      if (!terminalHistory && (!Array.isArray(unit.allowedPaths) || unit.allowedPaths.length === 0)) {
         throw new Error(`Work unit ${unit.id}: write work requires at least one allowed path.`);
       }
-      if (!Array.isArray(unit.verification) || unit.verification.length === 0) {
+      if (!terminalHistory && (!Array.isArray(unit.verification) || unit.verification.length === 0)) {
         throw new Error(`Work unit ${unit.id}: write work requires at least one verification command.`);
       }
-      const scopes = unit.allowedPaths.map(normalizedScope);
+      const scopes = (unit.allowedPaths ?? []).map(normalizedScope);
       if (unit.parallelSafe === true && scopes.some((scope) => serializedPaths.some((serialized) => (
         scope === '.' || serialized === '.' || scope === serialized || scope.startsWith(`${serialized}/`) || serialized.startsWith(`${scope}/`)
       )))) {
