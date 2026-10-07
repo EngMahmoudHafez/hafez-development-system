@@ -2,7 +2,8 @@ import path from 'node:path';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { commandExists, run, runStatus } from '../lib/process.mjs';
-import { hafezPaths, loadProjectState } from './state.mjs';
+import { hafezPaths, loadProjectState, saveState } from './state.mjs';
+import { loadActiveSlice } from './work-units.mjs';
 import { isoFileTimestamp, readJson, slugify, writeJson } from '../lib/files.mjs';
 import { randomUUID } from 'node:crypto';
 import { inspectGit } from '../lib/git.mjs';
@@ -22,6 +23,7 @@ import {
 
 const delegationResultSchemaPath = fileURLToPath(new URL('../../schemas/delegation-result.schema.json', import.meta.url));
 const leadReviewSchemaPath = fileURLToPath(new URL('../../schemas/lead-review-response.schema.json', import.meta.url));
+const leadDecompositionSchemaPath = fileURLToPath(new URL('../../schemas/lead-decomposition-response.schema.json', import.meta.url));
 
 const providerDefinitions = {
   codex: { command: 'codex', kind: 'agent-cli', aliases: ['openai'] },
@@ -505,5 +507,187 @@ export async function autoReviewDelegation(root, taskId, options = {}) {
     verdict: review.verdict,
     response: review,
     recorded,
+  };
+}
+
+
+function leadModelFor(provider, explicitModel = null) {
+  if (explicitModel) return explicitModel;
+  return provider === 'gemini' ? 'pro' : null;
+}
+
+function leadDecompositionPrompt(context) {
+  return [
+    'Role: lead planner for Hafez autonomous delivery.',
+    'Decompose the active slice into a small dependency-aware execution graph. Do not modify files.',
+    `Project policy: ${JSON.stringify(context.managed.project)}`,
+    `Current state: ${JSON.stringify(context.managed.state)}`,
+    `Active slice: ${JSON.stringify(context.slice)}`,
+    'Use scout for repository research, worker for bounded low-risk implementation, specialist for security/migrations/concurrency/payment/performance or repeated failures, and lead only for cross-cutting technical ownership.',
+    'Never assign two write units overlapping paths. Keep lockfiles, root registries, serializedPaths, and migration ordering serialized.',
+    'Each unit must use status planned and a WU-XX id.',
+    'If the slice cannot be decomposed safely without a material product/business/architecture/legal/privacy/compliance choice, set ownerDecision instead of guessing.',
+    'Otherwise ownerDecision must be null.',
+    'Return one JSON object matching hds-lead-decomposition-response/v1. Do not wrap it in Markdown.',
+  ].join('\n');
+}
+
+function leadDecompositionInvocation(provider, root, prompt, model = null) {
+  const routed = leadModelFor(provider, model);
+  if (provider === 'codex') {
+    const resultPath = path.join(root, '.hafez', 'lead-decomposition.provider-result.json');
+    return {
+      command: 'codex',
+      args: [
+        'exec',
+        ...(routed ? ['--model', routed] : []),
+        '--ephemeral',
+        '--ignore-user-config',
+        '--json',
+        '--sandbox', 'read-only',
+        '--cd', root,
+        '--output-schema', leadDecompositionSchemaPath,
+        '--output-last-message', resultPath,
+        '-',
+      ],
+      input: prompt,
+      cwd: root,
+      resultSource: 'file',
+      resultPath,
+    };
+  }
+  if (provider === 'claude') {
+    return {
+      command: 'claude',
+      args: [...(routed ? ['--model', routed] : []), '--restricted', '--strict-mcp-config', '--print', '--permission-prompts', 'none', '--tools', 'Read,Glob,Grep,Bash', '--no-session-persistence', '--output-format', 'json'],
+      input: prompt,
+      cwd: root,
+      resultSource: 'claude-json',
+    };
+  }
+  if (provider === 'gemini') {
+    return {
+      command: 'gemini',
+      args: [...(routed ? ['--model', routed] : []), '--prompt', prompt, '--approval-mode', 'plan', '--sandbox', '--output-format', 'json'],
+      cwd: root,
+      resultSource: 'gemini-json',
+    };
+  }
+  return null;
+}
+
+function structuredLeadPayload(execution, invocation, provider, label) {
+  let raw;
+  if (invocation.resultSource === 'file') raw = readFileSync(invocation.resultPath, 'utf8');
+  else if (invocation.resultSource === 'claude-json') {
+    const envelope = JSON.parse(execution.stdout || '{}');
+    if (envelope.is_error || typeof envelope.result !== 'string') throw new Error(`${label} returned an invalid Claude envelope.`);
+    raw = envelope.result;
+  } else if (invocation.resultSource === 'gemini-json') {
+    const envelope = JSON.parse(execution.stdout || '{}');
+    if (envelope.error || typeof envelope.response !== 'string') throw new Error(`${label} returned an invalid Gemini envelope.`);
+    raw = envelope.response;
+  } else raw = execution.stdout ?? '';
+
+  try {
+    return JSON.parse(raw);
+  } catch {
+    throw new Error(`${provider} ${label.toLowerCase()} did not return valid JSON.`);
+  }
+}
+
+function validateLeadWorkUnits(workUnits) {
+  if (!Array.isArray(workUnits) || workUnits.length === 0) throw new Error('Lead decomposition must return at least one work unit.');
+  const ids = new Set();
+  for (const unit of workUnits) {
+    if (!unit || typeof unit !== 'object' || Array.isArray(unit)) throw new Error('Lead decomposition work units must be objects.');
+    if (!/^WU-[0-9]{2,4}$/.test(unit.id ?? '')) throw new Error('Lead decomposition work unit id is invalid.');
+    if (ids.has(unit.id)) throw new Error(`Lead decomposition contains duplicate work unit ${unit.id}.`);
+    ids.add(unit.id);
+    if (unit.status !== 'planned') throw new Error(`Lead decomposition work unit ${unit.id} must start as planned.`);
+    if (!['scout', 'worker', 'specialist', 'lead'].includes(unit.workerTier)) throw new Error(`Lead decomposition work unit ${unit.id} has invalid workerTier.`);
+    if (!['read-only', 'write-worktree'].includes(unit.access)) throw new Error(`Lead decomposition work unit ${unit.id} has invalid access.`);
+    if (!Array.isArray(unit.dependencies) || !Array.isArray(unit.allowedPaths) || !Array.isArray(unit.verification) || !Array.isArray(unit.acceptanceCriteria)) {
+      throw new Error(`Lead decomposition work unit ${unit.id} has invalid array fields.`);
+    }
+  }
+  for (const unit of workUnits) {
+    for (const dependency of unit.dependencies) {
+      if (!ids.has(dependency)) throw new Error(`Lead decomposition work unit ${unit.id} depends on unknown unit ${dependency}.`);
+    }
+  }
+}
+
+export async function autoDecomposeActiveSlice(root, options = {}) {
+  const context = await loadActiveSlice(root);
+  if (!context.slice || !context.activeSlice) return { decomposed: false, reason: 'no-active-slice', provider: null };
+
+  const config = await readJson(hafezPaths(root).delegation, {});
+  const status = options.providerStatus ?? providerStatus();
+  const leadProvider = selectLeadProvider(status, {
+    leadProvider: options.leadProvider ?? config.leadProvider ?? null,
+  });
+  if (!leadProvider) return { decomposed: false, reason: 'no-lead-provider', provider: null };
+
+  const prompt = leadDecompositionPrompt(context);
+  const invocation = leadDecompositionInvocation(
+    leadProvider,
+    path.resolve(root),
+    prompt,
+    options.leadModel ?? config.leadModel ?? null,
+  );
+  if (!invocation || !commandExists(invocation.command)) {
+    return { decomposed: false, reason: 'lead-provider-unavailable', provider: leadProvider };
+  }
+
+  const execution = run(invocation.command, invocation.args, {
+    cwd: invocation.cwd,
+    input: invocation.input,
+    timeout: Number(options.timeoutSeconds ?? 900) * 1000,
+  });
+  if (execution.status !== 0) {
+    return { decomposed: false, reason: 'lead-provider-failed', provider: leadProvider, exitCode: execution.status };
+  }
+
+  const response = structuredLeadPayload(execution, invocation, leadProvider, 'Lead decomposition');
+  if (response?.schemaVersion !== 'hds-lead-decomposition-response/v1') throw new Error('Lead decomposition response schema version is invalid.');
+  if (typeof response.summary !== 'string' || response.summary.trim() === '') throw new Error('Lead decomposition summary is required.');
+
+  if (response.ownerDecision) {
+    context.managed.state.openQuestions = [
+      ...(context.managed.state.openQuestions ?? []),
+      {
+        question: response.ownerDecision.question,
+        category: response.ownerDecision.category,
+        reason: response.ownerDecision.reason,
+        requiresOwner: true,
+      },
+    ];
+    context.managed.state.nextSafeAction = response.ownerDecision.question;
+    await saveState(root, context.managed.state);
+    return {
+      decomposed: false,
+      reason: 'owner-decision-required',
+      provider: leadProvider,
+      ownerDecision: response.ownerDecision,
+      response,
+    };
+  }
+
+  validateLeadWorkUnits(response.workUnits);
+  context.slice.workUnits = response.workUnits;
+  context.slice.status = 'in-progress';
+  await writeJson(context.slicePath, context.slice);
+  context.managed.state.workflowState = 'in-progress';
+  context.managed.state.nextSafeAction = `Dispatch ready work units for ${context.activeSlice}.`;
+  await saveState(root, context.managed.state);
+
+  return {
+    decomposed: true,
+    reason: 'work-units-created',
+    provider: leadProvider,
+    activeSlice: context.activeSlice,
+    workUnitCount: response.workUnits.length,
+    response,
   };
 }
