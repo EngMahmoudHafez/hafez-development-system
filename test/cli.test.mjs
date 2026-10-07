@@ -75,3 +75,25 @@ test('CLI keeps Laravel architecture opt-in during adoption', async () => {
   const strictManifest = JSON.parse(await (await import('node:fs/promises')).readFile(path.join(strictRoot, '.hafez', 'project.json'), 'utf8'));
   assert.equal(strictManifest.policies.architectureProfile, 'laravel-domain-slices-v1');
 });
+
+
+test('CLI start alias enables durable autopilot and exposes one status view', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'hds-cli-start-'));
+  await writeFile(path.join(root, 'package.json'), JSON.stringify({
+    name: 'autopilot-cli-fixture',
+    scripts: { test: 'node -e "process.exit(0)"' },
+  }));
+
+  const started = invoke(['start', '.', '--max-steps', '1'], root);
+  assert.equal(started.mode, 'autopilot');
+  assert.equal(started.continuationRequired, true);
+  assert.ok(existsSync(path.join(root, '.hafez', 'autopilot.json')));
+
+  const status = invoke(['autopilot-status', '.'], root);
+  assert.equal(status.schemaVersion, 'hds-autopilot-status/v1');
+  assert.equal(status.active, true);
+  assert.equal(status.waitingForOwner, false);
+  assert.ok(status.providers);
+  assert.ok(status.delegationTopology);
+  assert.ok(status.integrationQueue);
+});
