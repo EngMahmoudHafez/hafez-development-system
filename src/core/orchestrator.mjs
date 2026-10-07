@@ -232,6 +232,9 @@ function delegationCycleStepLimit(value) {
 
 export async function runDelegationCycle(root, taskId, options = {}) {
   const maxSteps = delegationCycleStepLimit(options.maxSteps);
+  const executePacket = options.executePacket ?? executeDelegationAndIngest;
+  const integratePacket = options.integratePacket ?? integrateDelegation;
+  const continueTask = options.continueTask ?? continueDelegation;
   const trace = [];
   let currentTaskId = taskId;
 
@@ -260,7 +263,7 @@ export async function runDelegationCycle(root, taskId, options = {}) {
     trace.push(step);
 
     if (decision.action === 'continue' && decision.reason === 'worker-result-pending') {
-      const execution = await executeDelegationAndIngest(context.packet);
+      const execution = await executePacket(context.packet);
       step.execution = {
         status: execution.status,
         providerError: execution.providerError,
@@ -271,7 +274,7 @@ export async function runDelegationCycle(root, taskId, options = {}) {
     }
 
     if (['retry', 'escalate'].includes(decision.action)) {
-      const continued = await continueDelegation(root, currentTaskId, {
+      const continued = await continueTask(root, currentTaskId, {
         maxAttemptsPerTier: options.maxAttemptsPerTier,
         providerStatus: options.providerStatus,
         provider: options.provider,
@@ -293,7 +296,7 @@ export async function runDelegationCycle(root, taskId, options = {}) {
     }
 
     if (decision.action === 'integrate') {
-      const integration = await integrateDelegation(root, currentTaskId);
+      const integration = await integratePacket(root, currentTaskId);
       return {
         status: 'completed',
         reason: 'delegation-integrated',
