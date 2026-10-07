@@ -440,3 +440,78 @@ test('provider failover respects the same serialized provider lane during parall
   assert.ok(initialCodexEnd >= 0);
   assert.ok(fallbackCodexStart > initialCodexEnd, `fallback bypassed Codex lane: ${events.join(', ')}`);
 });
+
+
+test('dispatch rejects unsafe worker-tier and write-scope combinations', async () => {
+  const scoutWriter = await sliceFixture([
+    unit({
+      id: 'WU-01',
+      workerTier: 'scout',
+      access: 'write-worktree',
+      parallelSafe: false,
+      allowedPaths: ['src'],
+      verification: ['node --test'],
+    }),
+  ]);
+  await assert.rejects(
+    buildDispatchPlan(scoutWriter.root, { providerStatus: providers }),
+    /scout units must be read-only/,
+  );
+
+  const highRiskWorker = await sliceFixture([
+    unit({
+      id: 'WU-01',
+      risk: 'high',
+      workerTier: 'worker',
+      access: 'write-worktree',
+      parallelSafe: false,
+      allowedPaths: ['src'],
+      verification: ['node --test'],
+    }),
+  ]);
+  await assert.rejects(
+    buildDispatchPlan(highRiskWorker.root, { providerStatus: providers }),
+    /high-risk work requires specialist or lead tier/,
+  );
+
+  const missingVerification = await sliceFixture([
+    unit({
+      id: 'WU-01',
+      workerTier: 'worker',
+      access: 'write-worktree',
+      parallelSafe: false,
+      allowedPaths: ['src'],
+      verification: [],
+    }),
+  ]);
+  await assert.rejects(
+    buildDispatchPlan(missingVerification.root, { providerStatus: providers }),
+    /write work requires at least one verification command/,
+  );
+});
+
+test('dispatch rejects parallel writes that touch project serialized paths', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'hds-dispatch-serialized-'));
+  await writeFile(path.join(root, 'artisan'), '');
+  await writeFile(path.join(root, 'composer.json'), JSON.stringify({ name: 'fixture/laravel' }));
+  await adoptProject(await inspectProject(root));
+  const planned = await planSlice(root, 'S-01', 'Serialized path');
+  const slice = JSON.parse(await readFile(planned.filePath, 'utf8'));
+  slice.workUnits = [unit({
+    id: 'WU-01',
+    objective: 'Edit API routes.',
+    role: 'specialist',
+    risk: 'high',
+    workerTier: 'specialist',
+    access: 'write-worktree',
+    parallelSafe: true,
+    allowedPaths: ['routes/api.php'],
+    verification: ['php artisan route:list'],
+  })];
+  await writeFile(planned.filePath, JSON.stringify(slice, null, 2));
+
+  await assert.rejects(
+    buildDispatchPlan(root, { providerStatus: providers }),
+    /serialized project path/,
+  );
+});

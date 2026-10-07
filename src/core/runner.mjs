@@ -11,6 +11,7 @@ import { isDestructiveDecision, ownerDecisionItems, requiresExternalAuthority } 
 import { buildDispatchPlan, prepareDispatch } from './work-dispatch.mjs';
 import { activateNextRunnableSlice, completeActiveSlice, findNextRunnableSlice } from './work-units.mjs';
 import { autoDecomposeActiveSlice } from './providers.mjs';
+import { runRequiredGateRepair } from './repair.mjs';
 
 const DEFAULT_MAX_STEPS = 8;
 const MAX_ALLOWED_STEPS = 100;
@@ -401,6 +402,7 @@ export async function runAutonomous(inputPath = '.', options = {}) {
   const execute = options.execute === true;
   const autoAdopt = options.autoAdopt === true;
   const dispatchWork = options.prepareDispatch ?? prepareDispatch;
+  const repairGates = options.runRequiredGateRepair ?? runRequiredGateRepair;
   const trace = [];
   let adopted = null;
 
@@ -467,6 +469,32 @@ export async function runAutonomous(inputPath = '.', options = {}) {
         } else {
           machine = { root, phase: 'resume', resume: null, managed: null, continuous: autoAdopt };
           continue;
+        }
+      } else if (execute && transition.action.id === 'debug-required-gates') {
+        transition.action.autoExecuted = true;
+        transition.action.result = await repairGates(root, { maxSteps });
+        if (transition.action.result.reason === 'owner-decision-required') {
+          outcome = stop('paused', 'decision-required', {
+            questions: transition.action.result.cycle?.decision?.blockers ?? [],
+            continuationRequired: false,
+            decisionBoundary: 'Automatic technical repair reached a material project-owner boundary.',
+          });
+        } else if (transition.action.result.reason === 'required-gates-repaired' || transition.action.result.reason === 'no-required-gate-problems') {
+          machine = { root, phase: 'resume', resume: null, managed: null, continuous: autoAdopt };
+          continue;
+        } else {
+          outcome = autoAdopt
+            ? stop('ready', transition.action.result.reason === 'no-repair-provider' ? 'lead-action-required' : transition.action.result.reason, {
+              continuationRequired: true,
+              decisionBoundary: null,
+              nextSafeAction: transition.action.result.reason === 'no-repair-provider'
+                ? 'No standalone repair provider is available; let the host lead repair the required gates and rerun autopilot.'
+                : (transition.action.result.nextSafeAction
+                  ?? 'Continue technical repair with a stronger or revised engineering approach.'),
+            })
+            : stop('paused', 'agent-action-required', {
+              decisionBoundary: 'A lead agent must continue the technical repair.',
+            });
         }
       } else if (execute && transition.action.id === 'activate-next-slice') {
         transition.action.autoExecuted = true;
