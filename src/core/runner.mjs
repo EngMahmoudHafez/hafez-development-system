@@ -12,6 +12,7 @@ import { buildDispatchPlan, prepareDispatch } from './work-dispatch.mjs';
 import { activateNextRunnableSlice, completeActiveSlice, findNextRunnableSlice } from './work-units.mjs';
 import { autoDecomposeActiveSlice } from './providers.mjs';
 import { runRequiredGateRepair } from './repair.mjs';
+import { runTechnicalQuestionResolution } from './technical-actions.mjs';
 
 const DEFAULT_MAX_STEPS = 8;
 const MAX_ALLOWED_STEPS = 100;
@@ -403,6 +404,7 @@ export async function runAutonomous(inputPath = '.', options = {}) {
   const autoAdopt = options.autoAdopt === true;
   const dispatchWork = options.prepareDispatch ?? prepareDispatch;
   const repairGates = options.runRequiredGateRepair ?? runRequiredGateRepair;
+  const resolveTechnicalQuestions = options.runTechnicalQuestionResolution ?? runTechnicalQuestionResolution;
   const trace = [];
   let adopted = null;
 
@@ -428,11 +430,16 @@ export async function runAutonomous(inputPath = '.', options = {}) {
     trace.push({ step: trace.length + 1, phase: machine.phase, result: transition.traceResult });
     if (transition.action) {
       actions.push(transition.action);
-      if (execute && ['preview-verification', 'verify-current-work', 'verify-completed-slice'].includes(transition.action.id)) {
+      if (execute && ['preview-verification', 'verify-current-work', 'verify-completed-slice', 'reconcile-project-state'].includes(transition.action.id)) {
         transition.action.autoExecuted = true;
         transition.action.result = await verifyProject(root);
         if (transition.action.id === 'verify-completed-slice' && transition.action.result.allPassed) {
           transition.action.sliceCompletion = await completeActiveSlice(root);
+        }
+        if (transition.action.id === 'reconcile-project-state') {
+          transition.action.description = transition.action.result.allPassed
+            ? 'Verified the newer source revision and reconciled durable Hafez state.'
+            : 'The newer source revision failed verification and will enter automatic technical repair.';
         }
         machine = { root, phase: 'resume', resume: null, managed: null, continuous: autoAdopt };
         continue;
@@ -469,6 +476,31 @@ export async function runAutonomous(inputPath = '.', options = {}) {
         } else {
           machine = { root, phase: 'resume', resume: null, managed: null, continuous: autoAdopt };
           continue;
+        }
+      } else if (execute && transition.action.id === 'resolve-technical-questions') {
+        transition.action.autoExecuted = true;
+        transition.action.result = await resolveTechnicalQuestions(root, { maxSteps });
+        if (transition.action.result.reason === 'owner-decision-required') {
+          outcome = stop('paused', 'decision-required', {
+            questions: transition.action.result.cycle?.decision?.blockers ?? transition.action.result.ownerQuestions ?? [],
+            continuationRequired: false,
+            decisionBoundary: 'Technical analysis discovered a material project-owner decision boundary.',
+          });
+        } else if (transition.action.result.reason === 'technical-questions-resolved' || transition.action.result.reason === 'no-technical-questions') {
+          machine = { root, phase: 'resume', resume: null, managed: null, continuous: autoAdopt };
+          continue;
+        } else {
+          outcome = autoAdopt
+            ? stop('ready', transition.action.result.reason === 'no-lead-provider' ? 'lead-action-required' : transition.action.result.reason, {
+              continuationRequired: true,
+              decisionBoundary: null,
+              nextSafeAction: transition.action.result.reason === 'no-lead-provider'
+                ? 'No standalone lead provider is available; let the host lead resolve the technical questions and rerun autopilot.'
+                : 'Continue technical question resolution from durable delegation evidence.',
+            })
+            : stop('paused', 'agent-action-required', {
+              decisionBoundary: 'A lead agent must resolve the technical questions.',
+            });
         }
       } else if (execute && transition.action.id === 'debug-required-gates') {
         transition.action.autoExecuted = true;

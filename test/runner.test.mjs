@@ -573,3 +573,37 @@ test('autopilot consumes successful automatic gate repair and continues the loop
   assert.notEqual(result.reason, 'lead-action-required');
   assert.ok(result.actions.some((action) => action.id === 'debug-required-gates'));
 });
+
+
+test('autopilot reconciles a newer committed source revision through verification automatically', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'hds-runner-stale-auto-'));
+  git(root, 'init', '-q');
+  git(root, 'config', 'user.name', 'Hafez Tests');
+  git(root, 'config', 'user.email', 'hafez-tests@example.invalid');
+  await writeFile(path.join(root, 'package.json'), JSON.stringify({
+    name: 'stale-auto-fixture',
+    scripts: { test: 'node -e "process.exit(0)"' },
+  }, null, 2));
+  git(root, 'add', 'package.json');
+  git(root, 'commit', '-qm', 'feat: initial source');
+
+  await adoptProject(await inspectProject(root));
+  git(root, 'add', '.hafez', 'docs/hafez', 'AGENTS.md');
+  git(root, 'commit', '-qm', 'chore: adopt hafez');
+
+  await writeFile(path.join(root, 'feature.mjs'), 'export const ready = true;\n');
+  git(root, 'add', 'feature.mjs');
+  git(root, 'commit', '-qm', 'feat: newer source');
+  const latestSource = git(root, 'rev-parse', 'HEAD');
+
+  const result = await runAutonomous(root, { execute: true, autoAdopt: true, maxSteps: 10 });
+
+  const reconcile = result.actions.find((action) => action.id === 'reconcile-project-state');
+  assert.ok(reconcile);
+  assert.equal(reconcile.autoExecuted, true);
+  assert.equal(reconcile.result.allPassed, true);
+
+  const managed = await loadProjectState(root);
+  assert.equal(managed.state.lastKnownGoodRevision, latestSource);
+  assert.notEqual(result.reason, 'lead-action-required');
+});
