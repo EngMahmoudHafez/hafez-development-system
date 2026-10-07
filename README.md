@@ -59,11 +59,16 @@ hafez
       └─ completion claim ───► verify ─► handoff
 ```
 
+Autopilot continuity is durable too. While a continuous run is active, `.hafez/autopilot.json`
+records whether Hafez should resume automatically or is waiting at a real project-owner boundary.
+Session-start hooks load that state so a model/session interruption does not become an artificial stop.
+
 The repository becomes the durable source of truth:
 
 ```text
 .hafez/
 ├── project.json       architecture, gates, and autonomy policy
+├── autopilot.json     continuous-loop state and owner-boundary status
 ├── state.json         current focus, active slice, blockers, and next action
 ├── capabilities.json  status per user capability
 └── evidence/          verification results
@@ -89,6 +94,8 @@ hafez init . --architecture-profile laravel-domain-slices-v1 --apply
 hafez run .              # show one bounded next action
 hafez run . --execute    # execute deterministic gates/handoffs
 hafez autopilot .        # safe auto-adopt + continuous host-agent loop
+hafez delegation-next <task-id>      # decide review/retry/escalate/integrate/owner boundary
+hafez delegation-continue <task-id>  # retire failed attempt and create the next retry/escalation packet
 ```
 
 `hafez run` is bounded and resumable. In plugin/skills mode the host agent performs queued planning
@@ -232,7 +239,11 @@ external isolation; Zed and Antigravity Desktop are treated as hosts rather than
 Write-capable task packets now create one managed detached worktree, one writer reservation, explicit
 path and command scopes, a base revision, and a structured result. A write result is not integratable
 until a lead reviewer approves the exact delegated revision; `hafez delegation-integrate <task-id>`
-then performs the deterministic cherry-pick only after all readiness checks pass. Interrupted write tasks remain visible in `hafez integration-queue` as pending work. If a
+then performs the deterministic cherry-pick only after all readiness checks pass. Failed or rejected workers can be continued with `hafez delegation-continue <task-id>`. Hafez
+retires the old attempt without deleting its evidence, carries failure/review context forward, retries
+at the current tier, then escalates worker → specialist → lead when retries are exhausted. Technical
+failure is not a project-owner decision. Interrupted write tasks remain visible in
+`hafez integration-queue` as pending work. If a
 writer session is intentionally abandoned, `hafez delegation-abort <task-id>` removes its managed
 worktree and releases its reservation so a replacement writer can proceed safely. Hafez still leaves
 commit integration to one human or host-agent integrator. Kimi and Antigravity CLI execution stays
