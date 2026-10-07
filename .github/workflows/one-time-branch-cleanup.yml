@@ -47,3 +47,5 @@ jobs:
               echo "Already absent: $branch"
             fi
           done
+
+# armed cleanup run
