@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { hasWriterReservation } from './delegation.mjs';
-import { planDelegationTopology } from './orchestrator.mjs';
+import { planDelegationTopology, runDelegationCycle } from './orchestrator.mjs';
 import { executeDelegationAndIngest, prepareDelegation, providerStatus } from './providers.mjs';
 import { loadActiveSlice, updateWorkUnitStatus } from './work-units.mjs';
 
@@ -195,7 +195,10 @@ export async function prepareDispatch(root, options = {}) {
     packets.push({ unitId: unit.id, packet });
     if (options.execute === true) {
       const execution = await executeDelegationAndIngest(packet);
-      executions.push({ unitId: unit.id, packetId: packet.id, execution });
+      const cycle = options.cycle === false
+        ? null
+        : await runDelegationCycle(plan.root, packet.id, { maxSteps: options.maxSteps });
+      executions.push({ unitId: unit.id, packetId: packet.id, execution, cycle });
     }
   }
 
