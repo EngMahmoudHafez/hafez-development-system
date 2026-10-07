@@ -377,3 +377,66 @@ test('serialized work starts only after the parallel scout phase finishes', asyn
   assert.ok(scoutEnd >= 0);
   assert.ok(leadStart > scoutEnd, `lead started before scout phase finished: ${events.join(', ')}`);
 });
+
+
+test('provider failover respects the same serialized provider lane during parallel scout execution', async () => {
+  const fixture = await sliceFixture([
+    unit({ id: 'WU-01', objective: 'Gemini scout that will fail over.' }),
+    unit({ id: 'WU-02', objective: 'Codex scout already using the Codex lane.' }),
+  ]);
+
+  const activeByProvider = new Map();
+  const maxByProvider = new Map();
+  const packetById = new Map();
+  const events = [];
+
+  const executePacket = async (packet) => {
+    packetById.set(packet.id, packet);
+    const active = (activeByProvider.get(packet.provider) ?? 0) + 1;
+    activeByProvider.set(packet.provider, active);
+    maxByProvider.set(packet.provider, Math.max(maxByProvider.get(packet.provider) ?? 0, active));
+    events.push(`start:${packet.provider}:${packet.id}`);
+
+    await new Promise((resolve) => setTimeout(resolve, packet.provider === 'codex' ? 50 : 10));
+
+    events.push(`end:${packet.provider}:${packet.id}`);
+    activeByProvider.set(packet.provider, activeByProvider.get(packet.provider) - 1);
+    return {
+      status: 0,
+      providerError: false,
+      result: { status: 'completed' },
+      readiness: { ready: false, reasons: [] },
+    };
+  };
+
+  const runCycle = async (root, taskId, options) => {
+    const original = packetById.get(taskId);
+    if (original?.provider === 'gemini') {
+      await options.executePacket({
+        ...original,
+        id: `${original.id}-codex-fallback`,
+        provider: 'codex',
+      });
+    }
+    return {
+      status: 'completed',
+      reason: 'scout-evidence-ready',
+      continuationRequired: true,
+      currentTaskId: taskId,
+      trace: [],
+    };
+  };
+
+  await prepareDispatch(fixture.root, {
+    providerStatus: providers,
+    execute: true,
+    executePacket,
+    runCycle,
+  });
+
+  assert.equal(maxByProvider.get('codex'), 1, `Codex lane overlapped: ${events.join(', ')}`);
+  const initialCodexEnd = events.findIndex((event) => event.startsWith('end:codex:') && !event.includes('fallback'));
+  const fallbackCodexStart = events.findIndex((event) => event.startsWith('start:codex:') && event.includes('fallback'));
+  assert.ok(initialCodexEnd >= 0);
+  assert.ok(fallbackCodexStart > initialCodexEnd, `fallback bypassed Codex lane: ${events.join(', ')}`);
+});
