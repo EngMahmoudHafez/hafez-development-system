@@ -88,7 +88,7 @@ function assignmentFor(unit, topology, scoutIndex, writerAvailable) {
     return {
       unitId: unit.id,
       action: 'wait',
-      reason: 'writer-reservation-active',
+      reason: 'writer-serialized',
       provider: null,
       dispatchable: false,
     };
