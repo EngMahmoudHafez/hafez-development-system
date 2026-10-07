@@ -543,3 +543,33 @@ test('autopilot escalates strategy after repeated no-progress loops without aski
   assert.ok(autopilot.noProgressCount >= 2);
   assert.equal(autopilot.strategyEscalation.level, 'specialist');
 });
+
+
+test('autopilot consumes successful automatic gate repair and continues the loop', async () => {
+  const root = await adoptedProject();
+  await declareGate(root, { id: 'test', command: [process.execPath, '-e', 'process.exit(1)'], required: true });
+  await updateState(root, { gates: { test: 'failed' }, workflowState: 'blocked' });
+
+  let repairs = 0;
+  const result = await runAutonomous(root, {
+    execute: true,
+    autoAdopt: true,
+    maxSteps: 8,
+    runRequiredGateRepair: async () => {
+      repairs += 1;
+      const managed = await loadProjectState(root);
+      managed.state.gates = { test: 'passed' };
+      managed.state.workflowState = 'ready';
+      await saveState(root, managed.state);
+      return {
+        status: 'completed',
+        reason: 'required-gates-repaired',
+        continuationRequired: true,
+      };
+    },
+  });
+
+  assert.equal(repairs, 1);
+  assert.notEqual(result.reason, 'lead-action-required');
+  assert.ok(result.actions.some((action) => action.id === 'debug-required-gates'));
+});
