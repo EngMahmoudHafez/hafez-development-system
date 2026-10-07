@@ -10,6 +10,7 @@ import { executeDelegation, prepareDelegation, providerStatus } from './core/pro
 import { listSkills } from './core/skill-registry.mjs';
 import { auditArchitecture } from './core/architecture.mjs';
 import { runAutonomous } from './core/runner.mjs';
+import { planDelegationTopology } from './core/orchestrator.mjs';
 import { validateProjectMetadata } from './core/metadata-validator.mjs';
 import { migrateFiles, migrationTargets } from './core/migrations.mjs';
 import { initializeWorkspace, inspectWorkspace, verifyWorkspace } from './core/workspace.mjs';
@@ -35,6 +36,7 @@ Usage:
   hafez delegation-integrate <task-id> [--path <path>]
   hafez delegation-abort <task-id> [--path <path>]
   hafez integration-queue [path] [--json]
+  hafez delegation-plan [path] [--json]
   hafez validate [path] [--json]
   hafez migrate [path-or-file] [--apply] [--json]
   hafez workspace [path] [--init --repository <id=relative-path> --apply] [--json]
@@ -140,6 +142,7 @@ async function runProjectCommand(command, targetPath, flags) {
   }
   if (command === 'workspace-verify') return verifyWorkspace(targetPath, { execute: Boolean(flags.execute) });
   if (command === 'integration-queue') return listIntegrationQueue(path.resolve(targetPath));
+  if (command === 'delegation-plan') return planDelegationTopology();
   throw new Error(`Unknown command: ${command}`);
 }
 
