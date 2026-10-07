@@ -42,7 +42,8 @@ function buildPrompt(packet) {
     `Project: ${executionRoot}`,
     `Base revision: ${packet.baseRevision ?? 'not available'}`,
     `Task: ${packet.task}`,
-    'Read AGENTS.md and .hafez/state.json before acting.',
+    'Use the embedded Hafez operating context below as authoritative for this delegation. If AGENTS.md or .hafez metadata are present in the execution checkout, read them too.',
+    `Hafez operating context: ${JSON.stringify(packet.operatingContext)}`,
     'Return: summary, files inspected or changed, verification evidence, risks, blockers, and next action.',
     packet.access === 'read-only'
       ? 'Do not modify files.'
@@ -134,7 +135,7 @@ async function prepareWriteContext(root, taskId, options) {
   if (hasWriterReservation(root)) throw new Error('A write-capable delegation is already reserved.');
   const scope = validateDelegationScope(options.allowedPaths, options.allowedCommands);
   const repository = gitRepositoryState(root);
-  if (repository.dirty) throw new Error('Write-capable delegation requires a clean integration worktree.');
+  if (repository.sourceDirty) throw new Error('Write-capable delegation requires a clean integration source tree; Hafez operating metadata may remain uncommitted.');
   let reservation = await reserveWriter(root, taskId, repository.baseRevision);
   let worktree = null;
   try {
@@ -223,6 +224,14 @@ export async function prepareDelegation(root, options) {
     workerTier,
     model: options.model ?? null,
     reviewRequired: options.reviewRequired ?? options.access === 'write-worktree',
+    operatingContext: {
+      activeSlice: managed?.state.activeSlice ?? null,
+      workUnitId: options.workUnitId ?? null,
+      architectureProfile: managed?.project?.policies?.architectureProfile ?? null,
+      autonomyMode: managed?.project?.policies?.autonomy?.mode ?? 'continue-until-decision',
+      serializedPaths: managed?.project?.policies?.serializedPaths ?? [],
+      requiredGates: (managed?.project?.gates ?? []).filter((gate) => gate.required).map((gate) => ({ id: gate.id, command: gate.command })),
+    },
     timeoutSeconds: 900,
     expectedOutput: ['summary', 'evidence', 'risks', 'blockers', 'nextAction'],
   };
