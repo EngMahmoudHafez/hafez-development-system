@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
+import { listIntegrationQueue } from '../src/core/delegation.mjs';
 
 let input = '';
 for await (const chunk of process.stdin) input += chunk;
@@ -12,6 +13,8 @@ const autopilotPath = path.join(root, '.hafez', 'autopilot.json');
 if (existsSync(statePath)) {
   const state = JSON.parse(await readFile(statePath, 'utf8'));
   const autopilot = existsSync(autopilotPath) ? JSON.parse(await readFile(autopilotPath, 'utf8')) : null;
+  const integrationQueue = await listIntegrationQueue(root);
+  const activeDelegations = integrationQueue.items.filter((item) => !item.terminal);
   const eventName = event.hook_event_name || 'SessionStart';
   const additionalContext = [
     'This repository uses Hafez Development System.',
@@ -24,6 +27,10 @@ if (existsSync(statePath)) {
       autopilot.waitingForOwner
         ? 'Do not continue past the recorded owner decision boundary until the project owner answers.'
         : 'Resume the Hafez autopilot loop immediately. Continue technical work, delegation, review, repair, and verification without asking for routine confirmation.',
+      ...(activeDelegations.length > 0 ? [
+        `Active delegations: ${activeDelegations.map((item) => `${item.taskId} [status=${item.status}, review=${item.review}]`).join('; ')}`,
+        'Resume these active delegation tasks before creating overlapping replacement work.',
+      ] : []),
     ] : []),
     'Read AGENTS.md and the active slice before editing. Verification evidence is required before completion.',
   ].join('\n');
