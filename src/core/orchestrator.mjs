@@ -1,5 +1,6 @@
 import { executeDelegationAndIngest, prepareDelegation, providerStatus } from './providers.mjs';
 import { integrateDelegation, readDelegationContext, retireDelegation } from './delegation.mjs';
+import { verifyProject } from './verifier.mjs';
 
 function usable(entry) {
   return entry?.installed === true && entry?.configured !== false;
@@ -234,6 +235,7 @@ export async function runDelegationCycle(root, taskId, options = {}) {
   const maxSteps = delegationCycleStepLimit(options.maxSteps);
   const executePacket = options.executePacket ?? executeDelegationAndIngest;
   const integratePacket = options.integratePacket ?? integrateDelegation;
+  const verifyIntegration = options.verifyIntegration ?? verifyProject;
   const continueTask = options.continueTask ?? continueDelegation;
   const trace = [];
   let currentTaskId = taskId;
@@ -297,12 +299,27 @@ export async function runDelegationCycle(root, taskId, options = {}) {
 
     if (decision.action === 'integrate') {
       const integration = await integratePacket(root, currentTaskId);
+      const verification = await verifyIntegration(root);
+      if (!verification.allPassed) {
+        return {
+          status: 'ready',
+          reason: 'post-integration-verification-failed',
+          continuationRequired: true,
+          currentTaskId,
+          integration,
+          verification,
+          decision,
+          nextSafeAction: 'Debug and repair failed required gates on the integration tree, then rerun verification.',
+          trace,
+        };
+      }
       return {
         status: 'completed',
-        reason: 'delegation-integrated',
+        reason: 'delegation-integrated-and-verified',
         continuationRequired: true,
         currentTaskId,
         integration,
+        verification,
         decision,
         trace,
       };
