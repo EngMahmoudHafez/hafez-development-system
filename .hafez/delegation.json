@@ -1,5 +1,8 @@
 {
   "schemaVersion": "hds-delegation/v1",
   "defaultAccess": "read-only",
-  "providers": {}
+  "providers": {},
+  "leadProvider": null,
+  "leadModel": null,
+  "autoReview": true
 }
