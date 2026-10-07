@@ -11,7 +11,7 @@ function serializeStatusWrite(root, operation) {
   const previous = statusWriteQueues.get(key) ?? Promise.resolve();
   const next = previous.catch(() => {}).then(operation);
   let queued;
-  queued = next.finally(() => {
+  queued = next.catch(() => {}).finally(() => {
     if (statusWriteQueues.get(key) === queued) statusWriteQueues.delete(key);
   });
   statusWriteQueues.set(key, queued);
