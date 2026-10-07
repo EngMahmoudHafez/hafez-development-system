@@ -28,7 +28,7 @@ Usage:
   hafez verify [path] [--execute] [--json]
   hafez handoff [path] [--json]
   hafez delegate <provider> --role <role> --task <task> [--access read-only|write-worktree]
-                 [--allowed-path <path>] [--allowed-command <command>] [--execute]
+                 [--allowed-path <path>] [--allowed-command <command>] [--worker-tier <tier>] [--model <model>] [--execute]
   hafez delegate-result <task-id> --file <result.json> [--path <path>]
   hafez delegation-status <task-id> [--path <path>]
   hafez delegation-review <task-id> --verdict approved|rejected --summary <text> [--reviewer <name>] [--path <path>]
@@ -162,6 +162,7 @@ async function runDelegate(positionals, flags) {
     allowedPaths: flagValues(flags['allowed-path']),
     allowedCommands: flagValues(flags['allowed-command']),
     workerTier: flags['worker-tier'] || (flags.access === 'write-worktree' ? 'worker' : 'scout'),
+    model: flags.model || null,
   });
   if (!flags.execute) return { packetPath: packet.packetPath, provider: packet.provider, execute: false };
   return { packetPath: packet.packetPath, provider: packet.provider, execute: true, result: executeDelegation(packet) };
