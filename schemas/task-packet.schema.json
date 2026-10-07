@@ -147,6 +147,16 @@
         "string",
         "null"
       ]
+    },
+    "parentTaskId": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "attempt": {
+      "type": "integer",
+      "minimum": 1
     }
   },
   "additionalProperties": false
