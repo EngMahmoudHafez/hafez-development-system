@@ -43,6 +43,39 @@
         "string",
         "null"
       ]
+    },
+    "ownerDecision": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "reason": {
+          "type": "string"
+        },
+        "boundary": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "items": {
+          "type": "array"
+        },
+        "proposedAction": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "reason",
+        "boundary",
+        "items",
+        "proposedAction"
+      ],
+      "additionalProperties": false
     }
   },
   "additionalProperties": false
