@@ -8,6 +8,7 @@ export function hafezPaths(root) {
     directory,
     project: path.join(directory, 'project.json'),
     state: path.join(directory, 'state.json'),
+    autopilot: path.join(directory, 'autopilot.json'),
     capabilities: path.join(directory, 'capabilities.json'),
     delegation: path.join(directory, 'delegation.json'),
     evidence: path.join(directory, 'evidence'),
