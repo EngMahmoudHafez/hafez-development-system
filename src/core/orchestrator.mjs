@@ -2,6 +2,7 @@ import { executeDelegationAndIngest, prepareDelegation, providerStatus } from '.
 import { integrateDelegation, readDelegationContext, retireDelegation } from './delegation.mjs';
 import { verifyProject } from './verifier.mjs';
 import { ownerDecisionItems } from './decision-policy.mjs';
+import { updateWorkUnitStatus } from './work-units.mjs';
 
 function usable(entry) {
   return entry?.installed === true && entry?.configured !== false;
@@ -197,6 +198,7 @@ export async function continueDelegation(root, taskId, options = {}) {
     workerTier: decision.nextTier,
     model: options.model ?? (decision.action === 'retry' ? context.packet.model : null),
     parentTaskId: context.packet.id,
+    workUnitId: context.packet.workUnitId ?? null,
     attempt: decision.nextAttempt,
     reviewRequired: context.packet.reviewRequired,
   });
@@ -296,6 +298,9 @@ export async function runDelegationCycle(root, taskId, options = {}) {
           trace,
         };
       }
+      if (context.packet.workUnitId) {
+        await updateWorkUnitStatus(root, context.packet.workUnitId, 'completed');
+      }
       return {
         status: 'completed',
         reason: 'delegation-integrated-and-verified',
@@ -331,6 +336,9 @@ export async function runDelegationCycle(root, taskId, options = {}) {
     }
 
     if (decision.action === 'owner-decision') {
+      if (context.packet.workUnitId) {
+        await updateWorkUnitStatus(root, context.packet.workUnitId, 'blocked');
+      }
       return {
         status: 'paused',
         reason: 'owner-decision-required',
@@ -342,6 +350,9 @@ export async function runDelegationCycle(root, taskId, options = {}) {
     }
 
     if (decision.reason === 'scout-evidence-ready') {
+      if (context.packet.workUnitId) {
+        await updateWorkUnitStatus(root, context.packet.workUnitId, 'completed');
+      }
       return {
         status: 'completed',
         reason: 'scout-evidence-ready',
