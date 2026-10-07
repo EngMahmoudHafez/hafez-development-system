@@ -87,3 +87,17 @@ For those outcomes, inspect the returned evidence, take the next action, and cal
 Only surface a blocking question when Hafez classifies it as an owner decision because it materially changes product/business behavior, architecture/public contracts, requires external authority/credentials, or is destructive/difficult to recover.
 
 A verified milestone may be reported to the user, but if the active project goal clearly has more in-scope work recorded, resume the loop instead of treating the milestone as the end of the project.
+
+
+## Non-stop host loop
+
+Treat these runtime outcomes as internal continuation signals, not user-facing stopping points:
+
+- `lead-action-required`: the lead performs the bounded action, records the result, then immediately runs `hafez start <path> --json` again.
+- `continuation-budget-reached`: immediately start another bounded cycle from durable state.
+- `delegations-dispatched`, `scout-evidence-ready`, `delegation-integrated-and-verified`, and other outcomes with `continuationRequired: true`: consume the result and continue the loop.
+- failed tests, rejected reviews, provider failures, unavailable helpers, and recoverable merge/verification failures: debug, retry, fail over, escalate, or let the lead take over.
+
+Return control to the project owner only when Hafez records `waitingForOwner: true`, or when the project has no known runnable work and a verified final handoff has been created.
+
+The lead must understand each worker result before choosing the next action. Never repeat a failed approach mechanically: carry forward the previous summary, blockers, review feedback, changed evidence, and retry tier.
