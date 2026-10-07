@@ -4,6 +4,17 @@ import { fileExists, readJson, writeJson } from '../lib/files.mjs';
 import { loadProjectState, saveState } from './state.mjs';
 
 const statuses = new Set(['planned', 'ready', 'active', 'blocked', 'completed']);
+const statusWriteQueues = new Map();
+
+function serializeStatusWrite(root, operation) {
+  const key = path.resolve(root);
+  const previous = statusWriteQueues.get(key) ?? Promise.resolve();
+  const next = previous.catch(() => {}).then(operation);
+  statusWriteQueues.set(key, next.finally(() => {
+    if (statusWriteQueues.get(key) === next) statusWriteQueues.delete(key);
+  }));
+  return next;
+}
 
 export async function loadActiveSlice(root) {
   const resolvedRoot = path.resolve(root);
@@ -24,20 +35,22 @@ export async function loadActiveSlice(root) {
 
 export async function updateWorkUnitStatus(root, workUnitId, status) {
   if (!statuses.has(status)) throw new Error(`Unsupported work unit status: ${status}`);
-  const context = await loadActiveSlice(root);
-  if (!context.slice) throw new Error('No active slice is available.');
-  if (!Array.isArray(context.slice.workUnits)) throw new Error('Active slice has no work units.');
+  return serializeStatusWrite(root, async () => {
+    const context = await loadActiveSlice(root);
+    if (!context.slice) throw new Error('No active slice is available.');
+    if (!Array.isArray(context.slice.workUnits)) throw new Error('Active slice has no work units.');
 
-  const index = context.slice.workUnits.findIndex((unit) => unit && typeof unit === 'object' && unit.id === workUnitId);
-  if (index < 0) throw new Error(`Work unit not found in active slice: ${workUnitId}`);
-  context.slice.workUnits[index] = { ...context.slice.workUnits[index], status };
-  await writeJson(context.slicePath, context.slice);
-  return {
-    activeSlice: context.activeSlice,
-    slicePath: context.slicePath,
-    workUnitId,
-    status,
-  };
+    const index = context.slice.workUnits.findIndex((unit) => unit && typeof unit === 'object' && unit.id === workUnitId);
+    if (index < 0) throw new Error(`Work unit not found in active slice: ${workUnitId}`);
+    context.slice.workUnits[index] = { ...context.slice.workUnits[index], status };
+    await writeJson(context.slicePath, context.slice);
+    return {
+      activeSlice: context.activeSlice,
+      slicePath: context.slicePath,
+      workUnitId,
+      status,
+    };
+  });
 }
 
 
