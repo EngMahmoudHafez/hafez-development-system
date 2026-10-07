@@ -368,6 +368,7 @@ export async function runAutonomous(inputPath = '.', options = {}) {
   const maxSteps = parseMaxSteps(options.maxSteps);
   const execute = options.execute === true;
   const autoAdopt = options.autoAdopt === true;
+  const dispatchWork = options.prepareDispatch ?? prepareDispatch;
   const trace = [];
   let adopted = null;
 
@@ -420,7 +421,7 @@ export async function runAutonomous(inputPath = '.', options = {}) {
           });
       } else if (execute && transition.action.id === 'dispatch-ready-work') {
         transition.action.autoExecuted = true;
-        transition.action.result = await prepareDispatch(root, { execute: true, maxSteps });
+        transition.action.result = await dispatchWork(root, { execute: true, maxSteps });
         const cycles = transition.action.result.executions
           .map((entry) => entry.cycle)
           .filter(Boolean);
