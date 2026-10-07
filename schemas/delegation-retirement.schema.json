@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hafez.dev/schemas/delegation-retirement.schema.json",
+  "title": "HDS delegation retirement receipt",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "taskId",
+    "reason",
+    "retiredAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "hds-delegation-retirement/v1"
+    },
+    "taskId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1
+    },
+    "retiredAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "additionalProperties": false
+}
