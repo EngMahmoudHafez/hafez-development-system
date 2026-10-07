@@ -96,6 +96,15 @@ export async function readDelegationPacket(root, taskId) {
   return readJson(delegationPaths(root, taskId).packet, null);
 }
 
+export async function readDelegationContext(root, taskId) {
+  const paths = delegationPaths(root, taskId);
+  return {
+    packet: await readJson(paths.packet, null),
+    result: await readJson(paths.result, null),
+    review: await readJson(paths.review, null),
+  };
+}
+
 function assertStringArray(value, field) {
   if (!Array.isArray(value) || value.some((item) => typeof item !== 'string')) {
     throw new Error(`Delegation result field ${field} must be an array of strings.`);
