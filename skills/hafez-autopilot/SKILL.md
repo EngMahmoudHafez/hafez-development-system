@@ -101,3 +101,13 @@ Treat these runtime outcomes as internal continuation signals, not user-facing s
 Return control to the project owner only when Hafez records `waitingForOwner: true`, or when the project has no known runnable work and a verified final handoff has been created.
 
 The lead must understand each worker result before choosing the next action. Never repeat a failed approach mechanically: carry forward the previous summary, blockers, review feedback, changed evidence, and retry tier.
+
+
+## No-progress escalation
+
+If Hafez reports `strategy-escalation-required`, do not ask the project owner. Treat it as an internal engineering escalation:
+
+- `specialist`: change provider or use a higher-capability specialist, narrow the reproduction, and try a materially different approach.
+- `lead`: the strongest available lead takes over the task directly, re-evaluates the assumptions and evidence, and changes strategy.
+
+A repeated result without new Git state, gate evidence, or slice progress is not progress. Do not keep retrying the same prompt or patch.

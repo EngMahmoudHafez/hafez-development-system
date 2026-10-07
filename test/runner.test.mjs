@@ -519,3 +519,27 @@ test('autopilot activates the next known slice instead of stopping after the cur
   const second = JSON.parse(await readFile(secondSlicePath, 'utf8'));
   assert.equal(second.status, 'in-progress');
 });
+
+
+test('autopilot escalates strategy after repeated no-progress loops without asking the owner', async () => {
+  const root = await adoptedProject();
+  await declareGate(root, { id: 'test', command: [process.execPath, '-e', 'process.exit(1)'], required: true });
+  await updateState(root, { gates: { test: 'failed' }, workflowState: 'blocked' });
+
+  const first = await runAutonomous(root, { execute: true, autoAdopt: true, maxSteps: 8 });
+  assert.equal(first.reason, 'lead-action-required');
+
+  const second = await runAutonomous(root, { execute: true, autoAdopt: true, maxSteps: 8 });
+  assert.equal(second.reason, 'lead-action-required');
+
+  const third = await runAutonomous(root, { execute: true, autoAdopt: true, maxSteps: 8 });
+  assert.equal(third.reason, 'strategy-escalation-required');
+  assert.equal(third.strategyEscalation.level, 'specialist');
+  assert.equal(third.continuationRequired, true);
+  assert.equal(third.decisionBoundary, null);
+
+  const autopilot = JSON.parse(await readFile(path.join(root, '.hafez', 'autopilot.json'), 'utf8'));
+  assert.equal(autopilot.waitingForOwner, false);
+  assert.ok(autopilot.noProgressCount >= 2);
+  assert.equal(autopilot.strategyEscalation.level, 'specialist');
+});

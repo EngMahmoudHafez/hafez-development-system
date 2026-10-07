@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { createHash } from 'node:crypto';
 import { resumeProject } from './resume.mjs';
 import { hafezPaths, loadProjectState } from './state.mjs';
 import { verifyProject } from './verifier.mjs';
@@ -343,6 +344,34 @@ async function advanceRunner(machine) {
  * Build a bounded, deterministic continuation plan without executing project
  * commands, calling a model, or changing project/application files.
  */
+function progressFingerprint(resume, actions, outcome) {
+  const payload = {
+    workflowState: resume?.workflowState ?? null,
+    activeSlice: resume?.activeSlice ?? null,
+    gates: resume?.gates ?? {},
+    sourceRevision: resume?.git?.sourceRevision ?? resume?.git?.revision ?? null,
+    sourceDirty: resume?.git?.sourceDirty ?? false,
+    lastActionId: actions.at(-1)?.id ?? null,
+    outcomeReason: outcome?.reason ?? null,
+  };
+  return createHash('sha256').update(JSON.stringify(payload)).digest('hex');
+}
+
+function escalationFor(noProgressCount) {
+  if (noProgressCount >= 4) {
+    return {
+      level: 'lead',
+      reason: 'repeated-no-progress',
+      instruction: 'The strongest lead must change the approach directly; do not repeat the same failed strategy.',
+    };
+  }
+  return {
+    level: 'specialist',
+    reason: 'repeated-no-progress',
+    instruction: 'Escalate to a specialist or different provider and use a materially different approach.',
+  };
+}
+
 async function markAutopilot(root, update = {}) {
   const filePath = hafezPaths(root).autopilot;
   const now = new Date().toISOString();
@@ -357,6 +386,9 @@ async function markAutopilot(root, update = {}) {
     lastReason: current?.lastReason ?? null,
     nextSafeAction: current?.nextSafeAction ?? null,
     ownerDecision: current?.ownerDecision ?? null,
+    progressFingerprint: current?.progressFingerprint ?? null,
+    noProgressCount: current?.noProgressCount ?? 0,
+    strategyEscalation: current?.strategyEscalation ?? null,
     ...update,
   };
   await writeJson(filePath, value);
@@ -486,22 +518,48 @@ export async function runAutonomous(inputPath = '.', options = {}) {
       'destructive-authority-required',
       'blockers-present',
     ]);
-    const waitingForOwner = ownerReasons.has(outcome.reason);
+    let waitingForOwner = ownerReasons.has(outcome.reason);
     const ownerItems = [
       ...(Array.isArray(outcome.questions) ? outcome.questions : []),
       ...(Array.isArray(outcome.blockers) ? outcome.blockers : []),
     ];
+
+    const previousAutopilot = await readJson(hafezPaths(root).autopilot, null);
+    const latestResume = await resumeProject(root);
+    const fingerprint = progressFingerprint(latestResume, actions, outcome);
+    const noProgressCount = previousAutopilot?.progressFingerprint === fingerprint
+      ? (previousAutopilot.noProgressCount ?? 0) + 1
+      : 0;
+    let strategyEscalation = null;
+
+    if (!waitingForOwner && outcome.reason !== 'handoff-created' && noProgressCount >= 2) {
+      strategyEscalation = escalationFor(noProgressCount);
+      outcome = {
+        ...outcome,
+        status: 'ready',
+        reason: 'strategy-escalation-required',
+        continuationRequired: true,
+        decisionBoundary: null,
+        nextSafeAction: strategyEscalation.instruction,
+        strategyEscalation,
+      };
+      waitingForOwner = false;
+    }
+
     await markAutopilot(root, {
       active: outcome.reason !== 'handoff-created',
       waitingForOwner,
       lastReason: outcome.reason,
-      nextSafeAction: outcome.nextSafeAction ?? machine.resume?.nextSafeAction ?? null,
+      nextSafeAction: outcome.nextSafeAction ?? latestResume.nextSafeAction ?? null,
       ownerDecision: waitingForOwner ? {
         reason: outcome.reason,
         boundary: outcome.decisionBoundary ?? null,
         items: ownerItems,
         proposedAction: outcome.proposedAction ?? null,
       } : null,
+      progressFingerprint: fingerprint,
+      noProgressCount,
+      strategyEscalation,
     });
   }
 
