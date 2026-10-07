@@ -132,6 +132,10 @@ export async function buildDispatchPlan(root, options = {}) {
       units.push({ ...unit, dispatch: { action: 'wait', reason: 'unit-blocked', dispatchable: false }, incompleteDependencies: dependency.incomplete });
       continue;
     }
+    if (unit.status === 'active') {
+      units.push({ ...unit, dispatch: { action: 'wait', reason: 'unit-already-active', dispatchable: false }, incompleteDependencies: dependency.incomplete });
+      continue;
+    }
     if (dependency.incomplete.length > 0) {
       units.push({ ...unit, dispatch: { action: 'wait', reason: 'dependencies-incomplete', dispatchable: false }, incompleteDependencies: dependency.incomplete });
       continue;
