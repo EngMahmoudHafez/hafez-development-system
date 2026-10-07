@@ -428,11 +428,16 @@ export async function runAutonomous(inputPath = '.', options = {}) {
     trace.push({ step: trace.length + 1, phase: machine.phase, result: transition.traceResult });
     if (transition.action) {
       actions.push(transition.action);
-      if (execute && ['preview-verification', 'verify-current-work', 'verify-completed-slice'].includes(transition.action.id)) {
+      if (execute && ['preview-verification', 'verify-current-work', 'verify-completed-slice', 'reconcile-project-state'].includes(transition.action.id)) {
         transition.action.autoExecuted = true;
         transition.action.result = await verifyProject(root);
         if (transition.action.id === 'verify-completed-slice' && transition.action.result.allPassed) {
           transition.action.sliceCompletion = await completeActiveSlice(root);
+        }
+        if (transition.action.id === 'reconcile-project-state') {
+          transition.action.description = transition.action.result.allPassed
+            ? 'Verified the newer source revision and reconciled durable Hafez state.'
+            : 'The newer source revision failed verification and will enter automatic technical repair.';
         }
         machine = { root, phase: 'resume', resume: null, managed: null, continuous: autoAdopt };
         continue;
