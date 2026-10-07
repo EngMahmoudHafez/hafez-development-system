@@ -1,0 +1,4 @@
+interface:
+  display_name: "Hafez — Decompose Work"
+  short_description: "Split slices into safe lead/worker execution units"
+  default_prompt: "Use $hafez-decompose to split the active slice into bounded, independently verifiable work units and route each unit to the appropriate scout, worker, specialist, or lead."
