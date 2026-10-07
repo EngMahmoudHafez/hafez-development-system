@@ -3,7 +3,7 @@ import { mkdtemp, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { extractDelegationResult, prepareDelegation, providerInvocation, providerStatus } from '../src/core/providers.mjs';
+import { extractDelegationResult, prepareDelegation, providerInvocation, providerStatus, selectLeadProvider } from '../src/core/providers.mjs';
 import { adoptProject } from '../src/core/state.mjs';
 import { inspectProject } from '../src/core/inspector.mjs';
 
@@ -170,4 +170,21 @@ test('provider structured output adapters reject prose and error envelopes', () 
     }, providerInvocation('gemini', packet)),
     /did not return a successful JSON response envelope/,
   );
+});
+
+
+test('standalone lead selection prefers a different ready provider and honors explicit policy', () => {
+  const status = {
+    codex: { installed: true, configured: true, kind: 'agent-cli' },
+    claude: { installed: true, configured: true, kind: 'agent-cli' },
+    gemini: { installed: true, configured: true, kind: 'agent-cli' },
+    zed: { installed: true, configured: null, kind: 'editor-host' },
+  };
+
+  assert.equal(selectLeadProvider(status, { excludeProvider: 'codex' }), 'claude');
+  assert.equal(selectLeadProvider(status, { leadProvider: 'gemini', excludeProvider: 'codex' }), 'gemini');
+  assert.equal(selectLeadProvider({
+    codex: { installed: true, configured: true, kind: 'agent-cli' },
+  }, { excludeProvider: 'codex' }), 'codex');
+  assert.equal(selectLeadProvider({ zed: { installed: true, configured: null, kind: 'editor-host' } }), null);
 });
