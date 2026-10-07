@@ -1,0 +1,4 @@
+interface:
+  display_name: "Hafez — Debug and Repair"
+  short_description: "Reproduce, repair, regress-test, and reverify failures"
+  default_prompt: "Use $hafez-debug to keep diagnosing and repairing this failure until required gates pass or a genuine external decision is needed."

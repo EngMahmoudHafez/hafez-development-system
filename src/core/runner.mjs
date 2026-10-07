@@ -3,6 +3,8 @@ import { resumeProject } from './resume.mjs';
 import { loadProjectState } from './state.mjs';
 import { verifyProject } from './verifier.mjs';
 import { createHandoff } from './handoff.mjs';
+import { inspectProject } from './inspector.mjs';
+import { adoptProject } from './state.mjs';
 
 const DEFAULT_MAX_STEPS = 8;
 const MAX_ALLOWED_STEPS = 100;
@@ -55,7 +57,17 @@ function stop(status, reason, details = {}) {
   return { status, reason, ...details };
 }
 
-function recordedBoundary(resume, state) {
+function requiredGateIds(project) {
+  const ids = new Set(
+    (project.gates ?? [])
+      .filter((gate) => gate.required)
+      .map((gate) => gate.id),
+  );
+  if (project.policies?.architectureProfile) ids.add('architecture-structure');
+  return ids;
+}
+
+function recordedBoundary(resume, state, project) {
   if (!resume.managed) {
     return stop('paused', 'adoption-required', {
       decisionBoundary: 'Adoption writes project operating metadata and must be requested explicitly.',
@@ -69,19 +81,24 @@ function recordedBoundary(resume, state) {
     });
   }
 
-  if (resume.workflowState === 'blocked') {
+  const requiredIds = requiredGateIds(project);
+  const gateStops = Object.entries(resume.gates)
+    .filter(([id, status]) => requiredIds.has(id) && ['failed', 'unavailable', 'skipped'].includes(status))
+    .map(([id, status]) => ({ id, status }));
+  const retryableAfterRepair = resume.git.sourceDirty
+    && gateStops.length > 0
+    && gateStops.every((gate) => gate.status === 'failed');
+
+  if (resume.workflowState === 'blocked' && !retryableAfterRepair) {
     return stop('blocked', 'workflow-blocked', {
       decisionBoundary: 'The saved workflow is blocked; record or resolve its concrete blocker before continuing.',
     });
   }
 
-  const gateStops = Object.entries(resume.gates)
-    .filter(([, status]) => ['failed', 'unavailable', 'skipped'].includes(status))
-    .map(([id, status]) => ({ id, status }));
-  if (gateStops.length > 0) {
+  if (gateStops.length > 0 && !retryableAfterRepair) {
     return stop('blocked', 'quality-gates-not-passed', {
       gates: gateStops,
-      decisionBoundary: 'A failed, unavailable, or skipped gate is never treated as passed.',
+      decisionBoundary: 'A failed, unavailable, or skipped required gate is never treated as passed.',
     });
   }
 
@@ -113,8 +130,8 @@ function authorityBoundary(resume, state) {
   return null;
 }
 
-function boundaryFor(resume, state) {
-  return recordedBoundary(resume, state) ?? authorityBoundary(resume, state);
+function boundaryFor(resume, state, project) {
+  return recordedBoundary(resume, state, project) ?? authorityBoundary(resume, state);
 }
 
 function commandAction(id, description, previewCommand, executeCommand = null) {
@@ -133,7 +150,15 @@ function verificationAction(id, description) {
   return commandAction(id, description, 'hafez verify .', 'hafez verify . --execute');
 }
 
-function dirtyWorkAction(state) {
+function dirtyWorkAction(state, project) {
+  const pendingGateIds = unverifiedGateIds(project, state);
+  if (state.workflowState === 'ready' && pendingGateIds.length === 0) {
+    return commandAction(
+      'create-handoff',
+      'Create a durable handoff for the verified uncommitted work before further changes.',
+      'hafez handoff .',
+    );
+  }
   if (Object.keys(state.gates ?? {}).length === 0) {
     return commandAction(
       'preview-verification',
@@ -158,7 +183,6 @@ function unverifiedGateIds(project, state) {
 
 function chooseAction(resume, managed) {
   const { project, state } = managed;
-  if (resume.git.dirty) return dirtyWorkAction(state);
   if (resume.staleRevision) {
     return agentAction(
       'reconcile-project-state',
@@ -166,6 +190,7 @@ function chooseAction(resume, managed) {
       'read-only-analysis',
     );
   }
+  if (resume.git.sourceDirty) return dirtyWorkAction(state, project);
 
   const pendingGateIds = unverifiedGateIds(project, state);
   if (pendingGateIds.length > 0 || resume.workflowState === 'verifying') {
@@ -201,7 +226,7 @@ async function resumeTransition(root) {
 }
 
 function boundaryTransition(resume, managed) {
-  const outcome = boundaryFor(resume, managed?.state ?? {});
+  const outcome = boundaryFor(resume, managed?.state ?? {}, managed?.project ?? {});
   return { phase: 'choose-safe-action', outcome, traceResult: outcome?.reason ?? 'clear' };
 }
 
@@ -228,7 +253,16 @@ export async function runAutonomous(inputPath = '.', options = {}) {
   const root = path.resolve(inputPath);
   const maxSteps = parseMaxSteps(options.maxSteps);
   const execute = options.execute === true;
+  const autoAdopt = options.autoAdopt === true;
   const trace = [];
+  let adopted = null;
+
+  if (autoAdopt) {
+    const initialResume = await resumeProject(root);
+    if (!initialResume.managed) {
+      adopted = await adoptProject(await inspectProject(root));
+    }
+  }
   const actions = [];
   let machine = { root, phase: 'resume', resume: null, managed: null };
   let outcome = null;
@@ -273,7 +307,8 @@ export async function runAutonomous(inputPath = '.', options = {}) {
   return {
     schemaVersion: 'hds-run/v1',
     root,
-    mode: execute ? 'deterministic-execute' : 'read-only',
+    mode: autoAdopt ? 'autopilot' : (execute ? 'deterministic-execute' : 'read-only'),
+    adopted,
     maxSteps,
     stepsTaken: trace.length,
     ...outcome,

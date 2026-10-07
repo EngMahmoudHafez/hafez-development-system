@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hafez.dev/schemas/delegation-review.schema.json",
+  "title": "HDS delegation review",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "taskId",
+    "verdict",
+    "reviewer",
+    "summary",
+    "reviewedRevision",
+    "reviewedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "hds-delegation-review/v1"
+    },
+    "taskId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "verdict": {
+      "enum": [
+        "approved",
+        "rejected"
+      ]
+    },
+    "reviewer": {
+      "type": "string",
+      "minLength": 1
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "reviewedRevision": {
+      "type": "string",
+      "minLength": 1
+    },
+    "reviewedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "additionalProperties": false
+}

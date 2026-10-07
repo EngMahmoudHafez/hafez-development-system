@@ -33,26 +33,33 @@ function autonomyPolicy() {
   };
 }
 
-function projectPolicies(stacks) {
+function projectPolicies(stacks, options = {}) {
   const laravel = stacks.includes('laravel');
+  const requestedProfile = options.architectureProfile ?? null;
+  if (requestedProfile && requestedProfile !== 'laravel-domain-slices-v1') {
+    throw new Error(`Unsupported architecture profile: ${requestedProfile}`);
+  }
+  if (requestedProfile && !laravel) {
+    throw new Error('laravel-domain-slices-v1 can only be enabled for a detected Laravel project.');
+  }
   return {
     planning: 'vertical-slices',
     requireEvidence: true,
     writeDelegationRequiresWorktree: true,
-    architectureProfile: laravel ? 'laravel-domain-slices-v1' : null,
+    architectureProfile: requestedProfile,
     serializedPaths: laravel ? ['routes/api.php', 'database/seeders/DatabaseSeeder.php'] : [],
     autonomy: autonomyPolicy(),
   };
 }
 
-function projectManifest(report) {
+function projectManifest(report, options = {}) {
   const name = path.basename(report.root);
   return {
     schemaVersion: 'hds-project/v1',
     project: { id: slugify(name), name },
     adapters: report.stacks,
     gates: report.suggestedGates,
-    policies: projectPolicies(report.stacks),
+    policies: projectPolicies(report.stacks, options),
   };
 }
 
@@ -94,11 +101,11 @@ async function createDocumentation(root) {
   return created;
 }
 
-export async function adoptProject(report) {
+export async function adoptProject(report, options = {}) {
   const paths = hafezPaths(report.root);
   await mkdir(paths.directory, { recursive: true });
   const created = [];
-  if (await writeJsonIfMissing(paths.project, projectManifest(report))) created.push(paths.project);
+  if (await writeJsonIfMissing(paths.project, projectManifest(report, options))) created.push(paths.project);
   if (await writeJsonIfMissing(paths.state, workflowState(report))) created.push(paths.state);
   if (await writeJsonIfMissing(paths.capabilities, { schemaVersion: 'hds-capabilities/v1', capabilities: [] })) created.push(paths.capabilities);
   if (await writeJsonIfMissing(paths.delegation, { schemaVersion: 'hds-delegation/v1', defaultAccess: 'read-only', providers: {} })) created.push(paths.delegation);

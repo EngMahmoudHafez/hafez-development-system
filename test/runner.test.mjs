@@ -2,10 +2,17 @@ import assert from 'node:assert/strict';
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import test from 'node:test';
 import { inspectProject } from '../src/core/inspector.mjs';
 import { runAutonomous } from '../src/core/runner.mjs';
 import { adoptProject, loadProjectState, saveState } from '../src/core/state.mjs';
+
+function git(root, ...args) {
+  const result = spawnSync('git', args, { cwd: root, encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+  return result.stdout.trim();
+}
 
 async function adoptedProject() {
   const root = await mkdtemp(path.join(os.tmpdir(), 'hds-runner-'));
@@ -17,6 +24,12 @@ async function updateState(root, update) {
   const managed = await loadProjectState(root);
   Object.assign(managed.state, update);
   await saveState(root, managed.state);
+}
+
+async function declareGate(root, gate) {
+  const managed = await loadProjectState(root);
+  managed.project.gates = [gate];
+  await writeFile(managed.paths.project, `${JSON.stringify(managed.project, null, 2)}\n`);
 }
 
 test('runner is read-only by default and queues one bounded safe action', async () => {
@@ -61,6 +74,7 @@ test('runner does not continue a workflow marked as blocked without a recorded r
 test('runner never treats failed, unavailable, or skipped gates as passed', async () => {
   for (const status of ['failed', 'unavailable', 'skipped']) {
     const root = await adoptedProject();
+    await declareGate(root, { id: 'test', command: [process.execPath, '-e', 'process.exit(0)'], required: true });
     await updateState(root, { gates: { test: status } });
 
     const result = await runAutonomous(root);
@@ -69,6 +83,18 @@ test('runner never treats failed, unavailable, or skipped gates as passed', asyn
     assert.equal(result.reason, 'quality-gates-not-passed');
     assert.deepEqual(result.gates, [{ id: 'test', status }]);
   }
+});
+
+test('runner ignores failures from explicitly optional gates', async () => {
+  const root = await adoptedProject();
+  await declareGate(root, { id: 'optional-check', command: [process.execPath, '-e', 'process.exit(1)'], required: false });
+  await updateState(root, { gates: { 'optional-check': 'failed' }, workflowState: 'ready' });
+
+  const result = await runAutonomous(root);
+
+  assert.equal(result.status, 'ready');
+  assert.equal(result.reason, 'action-queued');
+  assert.notEqual(result.reason, 'quality-gates-not-passed');
 });
 
 test('runner pauses at explicit decision and authority boundaries', async () => {
@@ -133,4 +159,102 @@ test('execute mode runs declared gates and creates a handoff after success', asy
   assert.equal(result.reason, 'handoff-created');
   assert.deepEqual(result.actions.map((action) => action.id), ['preview-verification', 'create-handoff']);
   assert.ok(result.actions.every((action) => action.autoExecuted));
+});
+
+
+test('execute mode verifies dirty work once and then creates a handoff instead of looping', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'hds-runner-dirty-'));
+  git(root, 'init', '-q');
+  git(root, 'config', 'user.name', 'Hafez Tests');
+  git(root, 'config', 'user.email', 'hafez-tests@example.invalid');
+  await writeFile(path.join(root, 'package.json'), JSON.stringify({
+    name: 'dirty-runner-fixture',
+    scripts: { test: 'node -e "process.exit(0)"' },
+  }, null, 2));
+  await adoptProject(await inspectProject(root));
+  git(root, 'add', '.');
+  git(root, 'commit', '-qm', 'fixture');
+
+  await writeFile(path.join(root, 'feature.txt'), 'uncommitted but verified\n');
+
+  const result = await runAutonomous(root, { execute: true, maxSteps: 8 });
+
+  assert.equal(result.status, 'completed');
+  assert.equal(result.reason, 'handoff-created');
+  assert.deepEqual(result.actions.map((action) => action.id), ['preview-verification', 'create-handoff']);
+  assert.equal(result.actions.filter((action) => action.id.includes('verification')).length, 1);
+});
+
+
+test('execute mode can recover after a failed gate when repaired code makes the worktree dirty', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'hds-runner-repair-'));
+  git(root, 'init', '-q');
+  git(root, 'config', 'user.name', 'Hafez Tests');
+  git(root, 'config', 'user.email', 'hafez-tests@example.invalid');
+  await writeFile(path.join(root, 'package.json'), JSON.stringify({
+    name: 'repair-runner-fixture',
+    scripts: { test: 'node -e "process.exit(1)"' },
+  }, null, 2));
+  await adoptProject(await inspectProject(root));
+  git(root, 'add', '.');
+  git(root, 'commit', '-qm', 'fixture');
+
+  const failed = await runAutonomous(root, { execute: true, maxSteps: 8 });
+  assert.equal(failed.status, 'blocked');
+
+  await writeFile(path.join(root, 'package.json'), JSON.stringify({
+    name: 'repair-runner-fixture',
+    scripts: { test: 'node -e "process.exit(0)"' },
+  }, null, 2));
+
+  const recovered = await runAutonomous(root, { execute: true, maxSteps: 8 });
+  assert.equal(recovered.status, 'completed');
+  assert.equal(recovered.reason, 'handoff-created');
+  assert.deepEqual(recovered.actions.map((action) => action.id), ['verify-current-work', 'create-handoff']);
+});
+
+
+test('stale committed source takes priority over verifying newer dirty work', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'hds-runner-stale-dirty-'));
+  git(root, 'init', '-q');
+  git(root, 'config', 'user.name', 'Hafez Tests');
+  git(root, 'config', 'user.email', 'hafez-tests@example.invalid');
+  await writeFile(path.join(root, 'package.json'), JSON.stringify({
+    name: 'stale-dirty-fixture',
+    scripts: { test: 'node -e "process.exit(0)"' },
+  }, null, 2));
+  git(root, 'add', 'package.json');
+  git(root, 'commit', '-qm', 'feat: initial source');
+
+  await adoptProject(await inspectProject(root));
+  git(root, 'add', '.hafez', 'docs/hafez', 'AGENTS.md');
+  git(root, 'commit', '-qm', 'chore: adopt hafez');
+
+  await writeFile(path.join(root, 'source.mjs'), 'export const version = 2;\n');
+  git(root, 'add', 'source.mjs');
+  git(root, 'commit', '-qm', 'feat: advance source');
+
+  await writeFile(path.join(root, 'local-change.txt'), 'dirty change\n');
+
+  const result = await runAutonomous(root);
+
+  assert.equal(result.status, 'ready');
+  assert.equal(result.actions[0].id, 'reconcile-project-state');
+  assert.equal(result.actions[0].scope, 'read-only-analysis');
+});
+
+
+test('autopilot safely adopts an unmanaged project before selecting work', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'hds-autopilot-adopt-'));
+  await writeFile(path.join(root, 'package.json'), JSON.stringify({
+    name: 'autopilot-fixture',
+    scripts: { test: 'node -e "process.exit(0)"' },
+  }, null, 2));
+
+  const result = await runAutonomous(root, { execute: true, autoAdopt: true, maxSteps: 8 });
+
+  assert.equal(result.mode, 'autopilot');
+  assert.ok(result.adopted);
+  assert.notEqual(result.reason, 'adoption-required');
+  assert.ok(await loadProjectState(root));
 });

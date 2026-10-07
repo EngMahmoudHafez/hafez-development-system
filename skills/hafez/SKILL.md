@@ -13,6 +13,8 @@ state, planning, verification, and handoff contracts directly.
 
 - "Start this project" or "What should we do next?" routes to inspection, then offers adoption.
 - "Continue" or "Pick up where we stopped" routes to resume.
+- "Keep going", "finish whatever is left", "fix errors and continue", or "run this project autonomously" routes to `hafez-autopilot`.
+- Reproducible failures route to `hafez-debug`; delegated writes route through `hafez-review` before integration.
 - "Build this feature" routes to resume or adopt, then one vertical slice and its stack adapter.
 - "Is this ready?" routes to verification and an evidence-based readiness answer.
 - "Give this to another model" routes to bounded delegation and a durable handoff.
@@ -32,10 +34,11 @@ must pause before agent-owned work.
 2. If state exists, use `hafez-resume` before proposing work.
 3. Choose one current focus: discovery, foundation, delivery, integration, hardening, release, or operation.
 4. Plan end-user capabilities as vertical slices with `hafez-plan-slice`.
-5. Delegate only independent work with `hafez-delegate`; keep one integrator for shared files.
-6. Use the matching stack adapter when detected. Stack guidance never overrides observed project conventions.
-7. Run `hafez-verify` before claiming completion and `hafez-handoff` whenever work pauses or changes owner.
-8. Use `hafez-workspace` when one capability crosses repository boundaries.
+5. Delegate independent work with `hafez-delegate`; keep the strongest available model as lead integrator and use cheaper/helper models for bounded work.
+6. Require `hafez-review` approval for write-capable delegated revisions before deterministic integration.
+7. Use the matching stack adapter when detected. Stack guidance never overrides observed project conventions.
+8. Use `hafez-debug` for recoverable failures, then run `hafez-verify` before claiming completion and `hafez-handoff` whenever work pauses or changes owner.
+9. Use `hafez-workspace` when one capability crosses repository boundaries.
 
 Treat code, Git, lockfiles, contracts, and command output as stronger evidence than documentation. Never convert `skipped` or `unavailable` into success.
 

@@ -14,7 +14,7 @@ async function createFile(root, relativePath, content = '') {
   await writeFile(filePath, content);
 }
 
-test('Laravel adoption selects the domain-slices profile and exposes contract-sync gates', async () => {
+test('Laravel architecture profile is opt-in and can be enforced explicitly', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'hds-laravel-'));
   const requiredFiles = [
     'artisan',
@@ -42,7 +42,15 @@ test('Laravel adoption selects the domain-slices profile and exposes contract-sy
   assert.ok(gateIds.includes('php-openapi-sync'));
 
   await adoptProject(report);
-  const manifest = JSON.parse(await readFile(path.join(root, '.hafez', 'project.json'), 'utf8'));
+  let manifest = JSON.parse(await readFile(path.join(root, '.hafez', 'project.json'), 'utf8'));
+  assert.equal(manifest.policies.architectureProfile, null);
+
+  await rm(path.join(root, '.hafez'), { recursive: true, force: true });
+  await rm(path.join(root, 'docs', 'hafez'), { recursive: true, force: true });
+  await rm(path.join(root, 'AGENTS.md'), { force: true });
+
+  await adoptProject(await inspectProject(root), { architectureProfile: 'laravel-domain-slices-v1' });
+  manifest = JSON.parse(await readFile(path.join(root, '.hafez', 'project.json'), 'utf8'));
   assert.equal(manifest.policies.architectureProfile, 'laravel-domain-slices-v1');
   assert.equal(manifest.policies.autonomy.mode, 'continue-until-decision');
   assert.deepEqual(manifest.policies.serializedPaths, ['routes/api.php', 'database/seeders/DatabaseSeeder.php']);

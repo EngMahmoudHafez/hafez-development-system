@@ -10,27 +10,33 @@ import { executeDelegation, prepareDelegation, providerStatus } from './core/pro
 import { listSkills } from './core/skill-registry.mjs';
 import { auditArchitecture } from './core/architecture.mjs';
 import { runAutonomous } from './core/runner.mjs';
+import { planDelegationTopology } from './core/orchestrator.mjs';
 import { validateProjectMetadata } from './core/metadata-validator.mjs';
 import { migrateFiles, migrationTargets } from './core/migrations.mjs';
 import { initializeWorkspace, inspectWorkspace, verifyWorkspace } from './core/workspace.mjs';
-import { checkIntegrationReadiness, ingestDelegationResult, listIntegrationQueue } from './core/delegation.mjs';
+import { abortDelegation, checkIntegrationReadiness, ingestDelegationResult, integrateDelegation, listIntegrationQueue, recordDelegationReview } from './core/delegation.mjs';
 
 const help = `Hafez Development System
 
 Usage:
   hafez inspect [path] [--json]
-  hafez init [path] [--apply] [--json]
-  hafez adopt [path] [--apply] [--json]
+  hafez init [path] [--apply] [--architecture-profile <profile>] [--json]
+  hafez adopt [path] [--apply] [--architecture-profile <profile>] [--json]
   hafez resume [path] [--json]
-  hafez run [path] [--max-steps N] [--execute] [--json]
+  hafez run [path] [--max-steps N] [--execute] [--auto-adopt] [--json]
+  hafez autopilot [path] [--max-steps N] [--json]
   hafez plan <S-ID> <title> [--path <path>] [--json]
   hafez verify [path] [--execute] [--json]
   hafez handoff [path] [--json]
   hafez delegate <provider> --role <role> --task <task> [--access read-only|write-worktree]
-                 [--allowed-path <path>] [--allowed-command <command>] [--execute]
+                 [--allowed-path <path>] [--allowed-command <command>] [--worker-tier <tier>] [--model <model>] [--execute]
   hafez delegate-result <task-id> --file <result.json> [--path <path>]
   hafez delegation-status <task-id> [--path <path>]
+  hafez delegation-review <task-id> --verdict approved|rejected --summary <text> [--reviewer <name>] [--path <path>]
+  hafez delegation-integrate <task-id> [--path <path>]
+  hafez delegation-abort <task-id> [--path <path>]
   hafez integration-queue [path] [--json]
+  hafez delegation-plan [path] [--json]
   hafez validate [path] [--json]
   hafez migrate [path-or-file] [--apply] [--json]
   hafez workspace [path] [--init --repository <id=relative-path> --apply] [--json]
@@ -49,7 +55,7 @@ worktree and a single integrator.
 function parseArguments(argv) {
   const positionals = [];
   const flags = {};
-  const booleanFlags = new Set(['json', 'execute', 'apply']);
+  const booleanFlags = new Set(['json', 'execute', 'apply', 'auto-adopt']);
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
     if (!argument.startsWith('--')) {
@@ -98,17 +104,20 @@ async function runProjectCommand(command, targetPath, flags) {
   if (command === 'inspect') return inspectProject(targetPath);
   if (command === 'adopt' || command === 'init') {
     const report = await inspectProject(targetPath);
-    if (flags.apply) return adoptProject(report);
+    if (flags.apply) return adoptProject(report, { architectureProfile: flags['architecture-profile'] ?? null });
     return {
       root: report.root,
       apply: false,
       inferredFocus: report.inference.currentFocus,
+      architectureProfile: flags['architecture-profile'] ?? null,
+      recommendedArchitectureProfile: report.stacks.includes('laravel') ? 'laravel-domain-slices-v1' : null,
       allowedWrites: ['.hafez/', 'docs/hafez/', 'AGENTS.md when missing'],
       next: 'Review this preview, then rerun with --apply.',
     };
   }
   if (command === 'resume') return resumeProject(targetPath);
-  if (command === 'run') return runAutonomous(targetPath, { maxSteps: flags['max-steps'], execute: Boolean(flags.execute) });
+  if (command === 'run') return runAutonomous(targetPath, { maxSteps: flags['max-steps'], execute: Boolean(flags.execute), autoAdopt: Boolean(flags['auto-adopt']) });
+  if (command === 'autopilot') return runAutonomous(targetPath, { maxSteps: flags['max-steps'], execute: true, autoAdopt: true });
   if (command === 'verify') {
     const root = path.resolve(targetPath);
     return flags.execute ? verifyProject(root) : previewVerification(root);
@@ -133,6 +142,7 @@ async function runProjectCommand(command, targetPath, flags) {
   }
   if (command === 'workspace-verify') return verifyWorkspace(targetPath, { execute: Boolean(flags.execute) });
   if (command === 'integration-queue') return listIntegrationQueue(path.resolve(targetPath));
+  if (command === 'delegation-plan') return planDelegationTopology();
   throw new Error(`Unknown command: ${command}`);
 }
 
@@ -154,6 +164,8 @@ async function runDelegate(positionals, flags) {
     access: flags.access || 'read-only',
     allowedPaths: flagValues(flags['allowed-path']),
     allowedCommands: flagValues(flags['allowed-command']),
+    workerTier: flags['worker-tier'] || (flags.access === 'write-worktree' ? 'worker' : 'scout'),
+    model: flags.model || null,
   });
   if (!flags.execute) return { packetPath: packet.packetPath, provider: packet.provider, execute: false };
   return { packetPath: packet.packetPath, provider: packet.provider, execute: true, result: executeDelegation(packet) };
@@ -170,6 +182,30 @@ async function runDelegationStatus(positionals, flags) {
   const taskId = positionals[1];
   if (!taskId) throw new Error('Usage: hafez delegation-status <task-id> [--path <path>]');
   return checkIntegrationReadiness(path.resolve(flags.path || '.'), taskId);
+}
+
+async function runDelegationReview(positionals, flags) {
+  const taskId = positionals[1];
+  if (!taskId || !flags.verdict || !flags.summary) {
+    throw new Error('Usage: hafez delegation-review <task-id> --verdict approved|rejected --summary <text> [--reviewer <name>]');
+  }
+  return recordDelegationReview(path.resolve(flags.path || '.'), taskId, {
+    verdict: flags.verdict,
+    summary: flags.summary,
+    reviewer: flags.reviewer || 'lead-agent',
+  });
+}
+
+async function runDelegationIntegrate(positionals, flags) {
+  const taskId = positionals[1];
+  if (!taskId) throw new Error('Usage: hafez delegation-integrate <task-id> [--path <path>]');
+  return integrateDelegation(path.resolve(flags.path || '.'), taskId);
+}
+
+async function runDelegationAbort(positionals, flags) {
+  const taskId = positionals[1];
+  if (!taskId) throw new Error('Usage: hafez delegation-abort <task-id> [--path <path>]');
+  return abortDelegation(path.resolve(flags.path || '.'), taskId);
 }
 
 export async function main(argv) {
@@ -189,6 +225,9 @@ export async function main(argv) {
   else if (command === 'delegate') result = await runDelegate(positionals, flags);
   else if (command === 'delegate-result') result = await runDelegateResult(positionals, flags);
   else if (command === 'delegation-status') result = await runDelegationStatus(positionals, flags);
+  else if (command === 'delegation-review') result = await runDelegationReview(positionals, flags);
+  else if (command === 'delegation-integrate') result = await runDelegationIntegrate(positionals, flags);
+  else if (command === 'delegation-abort') result = await runDelegationAbort(positionals, flags);
   else result = await runProjectCommand(command, positionals[1] || flags.path || '.', flags);
   print(result, Boolean(flags.json));
 }

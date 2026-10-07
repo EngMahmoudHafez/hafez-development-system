@@ -127,6 +127,8 @@ dependencies. راجع أي Skill قبل تفعيلها لأنها تعمل بص
 ```bash
 hafez init .             # معاينة بدون كتابة
 hafez init . --apply     # إنشاء حالة Hafez فقط
+hafez init . --architecture-profile laravel-domain-slices-v1 --apply
+                         # تفعيل معماري Laravel الصارم صراحةً عند الحاجة
 hafez run .              # عرض الخطوة الآمنة التالية
 hafez run . --execute    # تنفيذ gates وhandoff الحتمية فقط
 ```
@@ -172,13 +174,16 @@ hafez migrate . --apply
 وتواصل خارجي، أو عملية مدمرة. لو توقفت الجلسة بسبب limit يمكن لجلسة جديدة استخدام `hafez resume`.
 
 التفويض الكتابي ينشئ worktree مستقلًا وwriter reservation واحدًا، ويسجل base revision والمسارات
-والأوامر المسموحة، ثم يرفض اعتبار النتيجة جاهزة للدمج ما لم تطابق Git والأدلة. يظل الدمج النهائي
-لمتكامل واحد. Kimi وAntigravity يعملان كـtask packets إلى أن تتوفر لهما طبقة عزل خارجية صلبة.
+والأوامر المسموحة، ثم يرفض اعتبار النتيجة جاهزة للدمج ما لم تطابق Git والأدلة. لو توقفت جلسة writer
+قبل إرجاع النتيجة، ستظل المهمة ظاهرة في `hafez integration-queue` كـpending ويمكن تنظيفها بأمان
+باستخدام `hafez delegation-abort <task-id>` لتحرير الـreservation والسماح بكاتب بديل. يظل الدمج
+النهائي لمتكامل واحد. Kimi وAntigravity يعملان كـtask packets إلى أن تتوفر لهما طبقة عزل خارجية صلبة.
 
 ## معمارية Laravel
 
 البروفايل يفرض Domain Modules وActions مستقلة وControllers رفيعة وPolicies صريحة وفصل config عن
-settings والصلاحيات، مع Pint وLarastan وPest ومزامنة OpenAPI.
+settings والصلاحيات، مع Pint وLarastan وPest ومزامنة OpenAPI. هذا البروفايل اختياري ولا يتم فرضه
+تلقائيًا عند تبني مشروع Laravel قديم؛ يمكن إدخال المشروع إلى Hafez أولًا ثم ترحيل slice واحدة في كل مرة.
 
 ```bash
 hafez architecture /path/to/laravel-project --json

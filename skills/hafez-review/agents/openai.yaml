@@ -1,0 +1,4 @@
+interface:
+  display_name: "Hafez — Review Delegated Work"
+  short_description: "Lead-model review before integration"
+  default_prompt: "Use $hafez-review to independently inspect this delegated change and approve it only if the exact revision is safe and verified."

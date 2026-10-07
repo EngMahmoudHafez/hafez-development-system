@@ -45,13 +45,23 @@ function buildPrompt(packet) {
   ].join('\n');
 }
 
+function routedModel(provider, packet) {
+  if (packet.model) return packet.model;
+  if (provider === 'gemini') {
+    if (['scout', 'worker'].includes(packet.workerTier)) return 'flash';
+    if (packet.workerTier === 'lead') return 'pro';
+  }
+  return null;
+}
+
 export function providerInvocation(provider, packet) {
   const prompt = buildPrompt(packet);
   const executionRoot = packet.worktree?.path ?? packet.projectRoot;
   const readOnly = packet.access === 'read-only';
+  const model = routedModel(provider, packet);
   if (provider === 'codex') return {
     command: 'codex',
-    args: ['exec', '--ephemeral', '--ignore-user-config', '--json', '--sandbox', readOnly ? 'read-only' : 'workspace-write', '--cd', executionRoot, '-'],
+    args: ['exec', ...(model ? ['--model', model] : []), '--ephemeral', '--ignore-user-config', '--json', '--sandbox', readOnly ? 'read-only' : 'workspace-write', '--cd', executionRoot, '-'],
     input: prompt,
     cwd: executionRoot,
   };
@@ -59,14 +69,14 @@ export function providerInvocation(provider, packet) {
     const tools = readOnly ? 'Read,Glob,Grep' : 'Read,Glob,Grep,Edit,Write,Bash';
     return {
       command: 'claude',
-      args: ['--restricted', '--strict-mcp-config', '--print', '--permission-prompts', 'none', '--tools', tools, '--no-session-persistence', '--output-format', 'json'],
+      args: [...(model ? ['--model', model] : []), '--restricted', '--strict-mcp-config', '--print', '--permission-prompts', 'none', '--tools', tools, '--no-session-persistence', '--output-format', 'json'],
       input: prompt,
       cwd: executionRoot,
     };
   }
   if (provider === 'gemini') return {
     command: 'gemini',
-    args: ['--prompt', prompt, '--approval-mode', readOnly ? 'plan' : 'auto_edit', '--sandbox', '--output-format', 'json'],
+    args: [...(model ? ['--model', model] : []), '--prompt', prompt, '--approval-mode', readOnly ? 'plan' : 'auto_edit', '--sandbox', '--output-format', 'json'],
     cwd: executionRoot,
   };
   if (provider === 'kimi') return { command: 'kimi', args: ['-p', prompt, '--output-format', 'stream-json'], cwd: executionRoot };
@@ -179,6 +189,9 @@ export async function prepareDelegation(root, options) {
     allowedCommands: context.allowedCommands,
     worktree: context.worktree,
     reservation: context.reservation ? { id: context.reservation.id, path: context.reservation.reservationPath } : null,
+    workerTier: options.workerTier ?? 'worker',
+    model: options.model ?? null,
+    reviewRequired: options.reviewRequired ?? options.access === 'write-worktree',
     timeoutSeconds: 900,
     expectedOutput: ['summary', 'evidence', 'risks', 'blockers', 'nextAction'],
   };

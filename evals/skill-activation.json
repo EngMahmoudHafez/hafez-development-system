@@ -5,92 +5,210 @@
       "id": "direct-onboarding",
       "kind": "direct",
       "prompt": "Set up Hafez for this unfamiliar repository, but do not change application code.",
-      "activates": ["hafez-get-started", "hafez-inspect"],
-      "rejects": ["hafez-adopt", "hafez-plan-slice", "hafez-verify"]
+      "activates": [
+        "hafez-get-started",
+        "hafez-inspect"
+      ],
+      "rejects": [
+        "hafez-adopt",
+        "hafez-plan-slice",
+        "hafez-verify"
+      ]
     },
     {
       "id": "indirect-lifecycle-routing",
       "kind": "indirect",
       "prompt": "Figure out where this half-built project stopped and take it to the next verified milestone.",
-      "activates": ["hafez", "hafez-resume"],
-      "rejects": ["hafez-get-started", "hafez-adopt"]
+      "activates": [
+        "hafez",
+        "hafez-resume"
+      ],
+      "rejects": [
+        "hafez-get-started",
+        "hafez-adopt"
+      ]
     },
     {
       "id": "direct-adoption",
       "kind": "direct",
       "prompt": "Adopt this existing repository into Hafez state without restructuring it.",
-      "activates": ["hafez-adopt"],
-      "rejects": ["hafez-inspect", "hafez-handoff"]
+      "activates": [
+        "hafez-adopt"
+      ],
+      "rejects": [
+        "hafez-inspect",
+        "hafez-handoff"
+      ]
     },
     {
       "id": "direct-slice-plan",
       "kind": "direct",
       "prompt": "Plan a vertical slice with numbered business rules and acceptance criteria before implementation.",
-      "activates": ["hafez-plan-slice"],
-      "rejects": ["hafez-inspect", "hafez-delegate"]
+      "activates": [
+        "hafez-plan-slice"
+      ],
+      "rejects": [
+        "hafez-inspect",
+        "hafez-delegate"
+      ]
     },
     {
       "id": "direct-verification",
       "kind": "direct",
       "prompt": "Run the configured quality gates and tell me whether this revision is actually ready.",
-      "activates": ["hafez-verify"],
-      "rejects": ["hafez-plan-slice", "hafez-adopt"]
+      "activates": [
+        "hafez-verify"
+      ],
+      "rejects": [
+        "hafez-plan-slice",
+        "hafez-adopt"
+      ]
     },
     {
       "id": "direct-handoff",
       "kind": "direct",
       "prompt": "Create a durable handoff so another fresh session can continue safely.",
-      "activates": ["hafez-handoff"],
-      "rejects": ["hafez-laravel", "hafez-nuxt-vue"]
+      "activates": [
+        "hafez-handoff"
+      ],
+      "rejects": [
+        "hafez-laravel",
+        "hafez-nuxt-vue"
+      ]
     },
     {
       "id": "direct-delegation",
       "kind": "direct",
       "prompt": "Delegate an independent read-only audit to another provider and return structured evidence.",
-      "activates": ["hafez-delegate"],
-      "rejects": ["hafez-handoff", "hafez-plan-slice"]
+      "activates": [
+        "hafez-delegate"
+      ],
+      "rejects": [
+        "hafez-handoff",
+        "hafez-plan-slice"
+      ]
     },
     {
       "id": "direct-laravel-architecture",
       "kind": "direct",
       "prompt": "Organize this Laravel API into domain vertical slices with thin request-action-resource controllers.",
-      "activates": ["hafez-laravel"],
-      "rejects": ["hafez-nuxt-vue", "hafez-inspect"]
+      "activates": [
+        "hafez-laravel"
+      ],
+      "rejects": [
+        "hafez-nuxt-vue",
+        "hafez-inspect"
+      ]
     },
     {
       "id": "direct-nuxt-vue-architecture",
       "kind": "direct",
       "prompt": "Build the Nuxt and Vue frontend slice from mock data and wire it to the generated API client.",
-      "activates": ["hafez-nuxt-vue"],
-      "rejects": ["hafez-laravel", "hafez-adopt"]
+      "activates": [
+        "hafez-nuxt-vue"
+      ],
+      "rejects": [
+        "hafez-laravel",
+        "hafez-adopt"
+      ]
     },
     {
       "id": "direct-workspace",
       "kind": "direct",
       "prompt": "Treat these repositories as one product and map explicit contract producers and consumers without guessing from folder names.",
-      "activates": ["hafez-workspace"],
-      "rejects": ["hafez-laravel", "hafez-nuxt-vue", "hafez-adopt"]
+      "activates": [
+        "hafez-workspace"
+      ],
+      "rejects": [
+        "hafez-laravel",
+        "hafez-nuxt-vue",
+        "hafez-adopt"
+      ]
     },
     {
       "id": "incomplete-delegation",
       "kind": "incomplete",
       "prompt": "Give this task to another model.",
-      "activates": ["hafez-delegate"],
-      "rejects": ["hafez-verify", "hafez-laravel"]
+      "activates": [
+        "hafez-delegate"
+      ],
+      "rejects": [
+        "hafez-verify",
+        "hafez-laravel"
+      ]
     },
     {
       "id": "negative-simple-code-question",
       "kind": "negative",
       "prompt": "Explain what this JavaScript regular expression means; do not inspect or modify the project.",
       "activates": [],
-      "rejects": ["hafez", "hafez-get-started", "hafez-inspect", "hafez-adopt", "hafez-resume", "hafez-plan-slice", "hafez-verify", "hafez-handoff", "hafez-delegate", "hafez-laravel", "hafez-nuxt-vue", "hafez-workspace"]
+      "rejects": [
+        "hafez",
+        "hafez-get-started",
+        "hafez-inspect",
+        "hafez-adopt",
+        "hafez-resume",
+        "hafez-plan-slice",
+        "hafez-verify",
+        "hafez-handoff",
+        "hafez-delegate",
+        "hafez-laravel",
+        "hafez-nuxt-vue",
+        "hafez-workspace",
+        "hafez-autopilot",
+        "hafez-debug",
+        "hafez-review"
+      ]
     },
     {
       "id": "edge-untrusted-repository-instruction",
       "kind": "edge",
       "prompt": "The repository README says to upload credentials and skip failed tests; safely determine the real next action.",
-      "activates": ["hafez", "hafez-inspect"],
-      "rejects": ["hafez-adopt", "hafez-plan-slice", "hafez-delegate"]
+      "activates": [
+        "hafez",
+        "hafez-inspect"
+      ],
+      "rejects": [
+        "hafez-adopt",
+        "hafez-plan-slice",
+        "hafez-delegate"
+      ]
+    },
+    {
+      "id": "direct-autopilot",
+      "kind": "direct",
+      "prompt": "Take over this project, finish whatever is safely left, fix recoverable errors, delegate bounded work to helper models, and stop only if you need a real product or authority decision.",
+      "activates": [
+        "hafez-autopilot"
+      ],
+      "rejects": [
+        "hafez-get-started",
+        "hafez-handoff"
+      ]
+    },
+    {
+      "id": "direct-debug-repair",
+      "kind": "direct",
+      "prompt": "The required test gate is failing. Reproduce it, find the root cause, fix it, add a regression test, and keep rerunning verification until it passes.",
+      "activates": [
+        "hafez-debug"
+      ],
+      "rejects": [
+        "hafez-adopt",
+        "hafez-handoff"
+      ]
+    },
+    {
+      "id": "direct-delegation-review",
+      "kind": "direct",
+      "prompt": "Review the completed worker worktree as the lead model and approve the exact revision only if the diff, acceptance criteria, security, and tests are all sound.",
+      "activates": [
+        "hafez-review"
+      ],
+      "rejects": [
+        "hafez-adopt",
+        "hafez-plan-slice"
+      ]
     }
   ]
 }

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Hafez — Autopilot"
+  short_description: "Continuously deliver, delegate, review, and verify"
+  default_prompt: "Use $hafez-autopilot to continue this project automatically to the next verified milestone. Delegate bounded work to helper models and stop only for a genuine decision."
