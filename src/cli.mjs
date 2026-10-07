@@ -1,7 +1,8 @@
 import path from 'node:path';
 import { readFile } from 'node:fs/promises';
+import { readJson } from './lib/files.mjs';
 import { inspectProject } from './core/inspector.mjs';
-import { adoptProject } from './core/state.mjs';
+import { adoptProject, hafezPaths } from './core/state.mjs';
 import { resumeProject } from './core/resume.mjs';
 import { planSlice } from './core/planner.mjs';
 import { previewVerification, verifyProject } from './core/verifier.mjs';
@@ -25,6 +26,8 @@ Usage:
   hafez resume [path] [--json]
   hafez run [path] [--max-steps N] [--execute] [--auto-adopt] [--json]
   hafez autopilot [path] [--max-steps N] [--json]
+  hafez start [path] [--max-steps N] [--json]
+  hafez autopilot-status [path] [--json]
   hafez plan <S-ID> <title> [--path <path>] [--json]
   hafez verify [path] [--execute] [--json]
   hafez handoff [path] [--json]
@@ -103,6 +106,24 @@ function render(value) {
   return JSON.stringify(value, null, 2);
 }
 
+async function loadAutopilotStatus(root) {
+  const marker = await readJson(hafezPaths(root).autopilot, null);
+  const resume = await resumeProject(root);
+  return {
+    schemaVersion: 'hds-autopilot-status/v1',
+    root,
+    active: marker?.active ?? false,
+    waitingForOwner: marker?.waitingForOwner ?? false,
+    lastReason: marker?.lastReason ?? null,
+    nextSafeAction: marker?.nextSafeAction ?? resume.nextSafeAction,
+    workflowState: resume.workflowState,
+    activeSlice: resume.activeSlice,
+    providers: providerStatus(),
+    delegationTopology: planDelegationTopology(),
+    integrationQueue: await listIntegrationQueue(root),
+  };
+}
+
 async function runProjectCommand(command, targetPath, flags) {
   if (command === 'inspect') return inspectProject(targetPath);
   if (command === 'adopt' || command === 'init') {
@@ -120,7 +141,12 @@ async function runProjectCommand(command, targetPath, flags) {
   }
   if (command === 'resume') return resumeProject(targetPath);
   if (command === 'run') return runAutonomous(targetPath, { maxSteps: flags['max-steps'], execute: Boolean(flags.execute), autoAdopt: Boolean(flags['auto-adopt']) });
-  if (command === 'autopilot') return runAutonomous(targetPath, { maxSteps: flags['max-steps'], execute: true, autoAdopt: true });
+  if (command === 'autopilot' || command === 'start') return runAutonomous(targetPath, { maxSteps: flags['max-steps'], execute: true, autoAdopt: true });
+  if (command === 'autopilot-status') {
+    const root = path.resolve(targetPath);
+    const managed = await loadAutopilotStatus(root);
+    return managed;
+  }
   if (command === 'verify') {
     const root = path.resolve(targetPath);
     return flags.execute ? verifyProject(root) : previewVerification(root);
