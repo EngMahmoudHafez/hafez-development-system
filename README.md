@@ -179,6 +179,7 @@ and `npm install --global /absolute/path`.
 | `hafez-nuxt-vue` | Nuxt/Vue contracts, composables, mock-to-real wiring, RTL, and UI gates |
 | `hafez-autopilot` | Continuous lead-agent loop: adopt, plan, delegate, repair, review, verify, and continue |
 | `hafez-debug` | Evidence-first reproduce → repair → regression-test → reverify loop |
+| `hafez-decompose` | Split active slices into bounded scout/worker/specialist/lead work units with safe scopes |
 | `hafez-delegate` | Bounded work for Codex, Claude, Kimi, Gemini, Antigravity, or Zed workflows |
 | `hafez-review` | Strong-model review and approval of delegated writes before integration |
 | `hafez-verify` | Required quality gates and durable evidence |
