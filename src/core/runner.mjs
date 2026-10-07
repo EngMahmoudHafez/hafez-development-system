@@ -1,10 +1,11 @@
 import path from 'node:path';
 import { resumeProject } from './resume.mjs';
-import { loadProjectState } from './state.mjs';
+import { hafezPaths, loadProjectState } from './state.mjs';
 import { verifyProject } from './verifier.mjs';
 import { createHandoff } from './handoff.mjs';
 import { inspectProject } from './inspector.mjs';
 import { adoptProject } from './state.mjs';
+import { readJson, writeJson } from '../lib/files.mjs';
 
 const DEFAULT_MAX_STEPS = 8;
 const MAX_ALLOWED_STEPS = 100;
@@ -278,6 +279,25 @@ async function advanceRunner(machine) {
  * Build a bounded, deterministic continuation plan without executing project
  * commands, calling a model, or changing project/application files.
  */
+async function markAutopilot(root, update = {}) {
+  const filePath = hafezPaths(root).autopilot;
+  const now = new Date().toISOString();
+  const current = await readJson(filePath, null);
+  const value = {
+    schemaVersion: 'hds-autopilot/v1',
+    active: current?.active ?? true,
+    mode: 'continuous',
+    startedAt: current?.startedAt ?? now,
+    updatedAt: now,
+    waitingForOwner: current?.waitingForOwner ?? false,
+    lastReason: current?.lastReason ?? null,
+    nextSafeAction: current?.nextSafeAction ?? null,
+    ...update,
+  };
+  await writeJson(filePath, value);
+  return value;
+}
+
 export async function runAutonomous(inputPath = '.', options = {}) {
   const root = path.resolve(inputPath);
   const maxSteps = parseMaxSteps(options.maxSteps);
@@ -291,6 +311,12 @@ export async function runAutonomous(inputPath = '.', options = {}) {
     if (!initialResume.managed) {
       adopted = await adoptProject(await inspectProject(root));
     }
+    await markAutopilot(root, {
+      active: true,
+      waitingForOwner: false,
+      lastReason: 'autopilot-running',
+      nextSafeAction: initialResume.nextSafeAction ?? null,
+    });
   }
   const actions = [];
   let machine = { root, phase: 'resume', resume: null, managed: null, continuous: autoAdopt };
@@ -343,6 +369,22 @@ export async function runAutonomous(inputPath = '.', options = {}) {
       : stop('paused', 'max-steps-reached', {
         decisionBoundary: `The bounded run reached its ${maxSteps}-step limit.`,
       });
+  }
+
+  if (autoAdopt) {
+    const ownerReasons = new Set([
+      'decision-required',
+      'external-authority-required',
+      'destructive-authority-required',
+      'blockers-present',
+    ]);
+    const waitingForOwner = ownerReasons.has(outcome.reason);
+    await markAutopilot(root, {
+      active: outcome.reason !== 'handoff-created',
+      waitingForOwner,
+      lastReason: outcome.reason,
+      nextSafeAction: outcome.nextSafeAction ?? machine.resume?.nextSafeAction ?? null,
+    });
   }
 
   return {
