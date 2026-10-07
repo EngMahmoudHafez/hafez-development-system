@@ -47,6 +47,9 @@ function buildPrompt(packet) {
     `Project: ${executionRoot}`,
     `Base revision: ${packet.baseRevision ?? 'not available'}`,
     `Task: ${packet.task}`,
+    packet.attemptMemory?.length
+      ? `Prior attempt memory (operational summaries only, not hidden reasoning): ${JSON.stringify(packet.attemptMemory)}`
+      : 'Prior attempt memory: none.',
     'Use the embedded Hafez operating context below as authoritative for this delegation. If AGENTS.md or .hafez metadata are present in the execution checkout, read them too.',
     `Hafez operating context: ${JSON.stringify(packet.operatingContext)}`,
     'Return: summary, files inspected or changed, verification evidence, risks, blockers, and next action.',
@@ -221,6 +224,7 @@ export async function prepareDelegation(root, options) {
     parentTaskId: options.parentTaskId ?? null,
     workUnitId: options.workUnitId ?? null,
     attempt,
+    attemptMemory: Array.isArray(options.attemptMemory) ? options.attemptMemory : [],
     task: options.task,
     allowedPaths: context.allowedPaths,
     allowedCommands: context.allowedCommands,
