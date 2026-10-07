@@ -47,12 +47,22 @@ function dependencyState(unit, byId) {
 
 function assignmentFor(unit, topology, scoutIndex, writerAvailable) {
   if (unit.workerTier === 'lead') {
+    const provider = topology.lead?.fallbackProvider ?? null;
+    if (unit.access === 'write-worktree' && !writerAvailable) {
+      return {
+        unitId: unit.id,
+        action: 'wait',
+        reason: 'writer-serialized',
+        provider: null,
+        dispatchable: false,
+      };
+    }
     return {
       unitId: unit.id,
-      action: 'lead',
-      reason: 'lead-owned-work',
-      provider: null,
-      dispatchable: false,
+      action: provider ? 'delegate' : 'lead',
+      reason: provider ? 'standalone-lead-provider-available' : 'host-lead-required',
+      provider,
+      dispatchable: Boolean(provider),
     };
   }
   if (unit.access === 'read-only') {
@@ -142,7 +152,7 @@ export async function buildDispatchPlan(root, options = {}) {
     }
 
     const assignment = assignmentFor(unit, topology, scoutIndex, writerAvailable);
-    if (unit.access === 'read-only' && assignment.provider) scoutIndex += 1;
+    if (unit.access === 'read-only' && unit.workerTier !== 'lead' && assignment.provider) scoutIndex += 1;
     if (unit.access === 'write-worktree' && assignment.dispatchable) writerAvailable = false;
     units.push({ ...unit, dispatch: assignment, incompleteDependencies: [] });
   }
