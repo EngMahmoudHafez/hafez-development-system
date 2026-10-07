@@ -1,4 +1,6 @@
 import path from 'node:path';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { commandExists, run, runStatus } from '../lib/process.mjs';
 import { hafezPaths, loadProjectState } from './state.mjs';
 import { isoFileTimestamp, slugify, writeJson } from '../lib/files.mjs';
@@ -8,11 +10,15 @@ import { createManagedWorktree, discardManagedWorktree, gitRepositoryState } fro
 import {
   delegationPacketPath,
   hasWriterReservation,
+  ingestDelegationResult,
   releaseWriterReservation,
   reserveWriter,
   updateWriterReservation,
+  validateDelegationResult,
   validateDelegationScope,
 } from './delegation.mjs';
+
+const delegationResultSchemaPath = fileURLToPath(new URL('../../schemas/delegation-result.schema.json', import.meta.url));
 
 const providerDefinitions = {
   codex: { command: 'codex', kind: 'agent-cli', aliases: ['openai'] },
@@ -59,12 +65,28 @@ export function providerInvocation(provider, packet) {
   const executionRoot = packet.worktree?.path ?? packet.projectRoot;
   const readOnly = packet.access === 'read-only';
   const model = routedModel(provider, packet);
-  if (provider === 'codex') return {
-    command: 'codex',
-    args: ['exec', ...(model ? ['--model', model] : []), '--ephemeral', '--ignore-user-config', '--json', '--sandbox', readOnly ? 'read-only' : 'workspace-write', '--cd', executionRoot, '-'],
-    input: prompt,
-    cwd: executionRoot,
-  };
+  if (provider === 'codex') {
+    const resultPath = `${packet.packetPath}.provider-result.json`;
+    return {
+      command: 'codex',
+      args: [
+        'exec',
+        ...(model ? ['--model', model] : []),
+        '--ephemeral',
+        '--ignore-user-config',
+        '--json',
+        '--sandbox', readOnly ? 'read-only' : 'workspace-write',
+        '--cd', executionRoot,
+        '--output-schema', delegationResultSchemaPath,
+        '--output-last-message', resultPath,
+        '-',
+      ],
+      input: prompt,
+      cwd: executionRoot,
+      resultSource: 'file',
+      resultPath,
+    };
+  }
   if (provider === 'claude') {
     const tools = readOnly ? 'Read,Glob,Grep' : 'Read,Glob,Grep,Edit,Write,Bash';
     return {
@@ -72,12 +94,14 @@ export function providerInvocation(provider, packet) {
       args: [...(model ? ['--model', model] : []), '--restricted', '--strict-mcp-config', '--print', '--permission-prompts', 'none', '--tools', tools, '--no-session-persistence', '--output-format', 'json'],
       input: prompt,
       cwd: executionRoot,
+      resultSource: 'claude-json',
     };
   }
   if (provider === 'gemini') return {
     command: 'gemini',
     args: [...(model ? ['--model', model] : []), '--prompt', prompt, '--approval-mode', readOnly ? 'plan' : 'auto_edit', '--sandbox', '--output-format', 'json'],
     cwd: executionRoot,
+    resultSource: 'gemini-json',
   };
   if (provider === 'kimi') return { command: 'kimi', args: ['-p', prompt, '--output-format', 'stream-json'], cwd: executionRoot };
   if (provider === 'antigravity-cli') return { command: 'agy', args: ['-p', prompt, '--sandbox', '--output-format', 'json'], cwd: executionRoot };
@@ -211,6 +235,35 @@ export async function prepareDelegation(root, options) {
   return packet;
 }
 
+export function extractDelegationResult(provider, execution, invocation) {
+  let raw;
+  if (invocation.resultSource === 'file') {
+    raw = readFileSync(invocation.resultPath, 'utf8');
+  } else if (invocation.resultSource === 'claude-json') {
+    const envelope = JSON.parse(execution.stdout || '{}');
+    if (envelope.is_error || typeof envelope.result !== 'string') {
+      throw new Error('Claude delegation did not return a successful JSON result envelope.');
+    }
+    raw = envelope.result;
+  } else if (invocation.resultSource === 'gemini-json') {
+    const envelope = JSON.parse(execution.stdout || '{}');
+    if (envelope.error || typeof envelope.response !== 'string') {
+      throw new Error('Gemini delegation did not return a successful JSON response envelope.');
+    }
+    raw = envelope.response;
+  } else {
+    raw = execution.stdout ?? '';
+  }
+
+  let result;
+  try {
+    result = JSON.parse(raw);
+  } catch {
+    throw new Error(`${provider} delegation final response is not valid hds-delegation-result JSON.`);
+  }
+  return validateDelegationResult(result);
+}
+
 export function executeDelegation(packet) {
   if (['kimi', 'antigravity-cli'].includes(packet.provider)) {
     throw new Error(`${packet.provider} requires an external read-only mount or isolated worktree before execution.`);
@@ -228,5 +281,21 @@ export function executeDelegation(packet) {
   if (execution.status !== 0) {
     throw new Error(`${packet.provider} delegation failed with exit code ${execution.status}. Task packet: ${packet.packetPath}`);
   }
-  return { status: execution.status, stdout: execution.stdout ?? '', stderr: execution.stderr ?? '' };
+  const structuredResult = extractDelegationResult(packet.provider, execution, invocation);
+  return {
+    status: execution.status,
+    stdout: execution.stdout ?? '',
+    stderr: execution.stderr ?? '',
+    structuredResult,
+  };
+}
+
+export async function executeDelegationAndIngest(packet) {
+  const execution = executeDelegation(packet);
+  const ingested = await ingestDelegationResult(packet.projectRoot, packet.id, execution.structuredResult);
+  return {
+    status: execution.status,
+    result: execution.structuredResult,
+    readiness: ingested.readiness,
+  };
 }
