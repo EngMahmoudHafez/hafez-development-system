@@ -16,6 +16,7 @@ function delegationPaths(root, taskId) {
     packet: path.join(directory, `${taskId}.json`),
     result: path.join(directory, `${taskId}.result.json`),
     review: path.join(directory, `${taskId}.review.json`),
+    retired: path.join(directory, `${taskId}.retired.json`),
     reservation: path.join(directory, 'writer-reservation.json'),
   };
 }
@@ -245,6 +246,35 @@ export function hasWriterReservation(root) {
   return fileExists(path.join(hafezPaths(root).delegations, 'writer-reservation.json'));
 }
 
+export async function retireDelegation(root, taskId, reason = 'superseded') {
+  const paths = delegationPaths(root, taskId);
+  const packet = await readJson(paths.packet, null);
+  if (!packet) throw new Error(`Delegation packet not found: ${taskId}`);
+
+  let worktreeRemoved = false;
+  let reservationReleased = false;
+  if (packet.access === 'write-worktree') {
+    const reservation = await readJson(paths.reservation, null);
+    if (reservation && reservation.taskId === packet.id && reservation.id === packet.reservation?.id) {
+      if (packet.worktree?.path) {
+        const { discardManagedWorktree } = await import('../lib/git-worktrees.mjs');
+        discardManagedWorktree(root, packet.worktree.path);
+        worktreeRemoved = true;
+      }
+      reservationReleased = await releaseWriterReservation(root, packet.id, reservation.id);
+    }
+  }
+
+  const retired = {
+    schemaVersion: 'hds-delegation-retirement/v1',
+    taskId,
+    reason,
+    retiredAt: new Date().toISOString(),
+  };
+  await writeJson(paths.retired, retired);
+  return { taskId, retired: true, worktreeRemoved, reservationReleased, retirementPath: paths.retired };
+}
+
 export async function abortDelegation(root, taskId) {
   const paths = delegationPaths(root, taskId);
   const packet = await readJson(paths.packet, null);
@@ -324,12 +354,13 @@ export async function listIntegrationQueue(root) {
   for (const taskId of taskIds) {
     const packet = await readJson(delegationPacketPath(root, taskId), null);
     const result = await readJson(delegationResultPath(root, taskId), null);
-    const readiness = await checkIntegrationReadiness(root, taskId);
+    const retired = await readJson(delegationPaths(root, taskId).retired, null);
+    const readiness = retired ? { ready: false, reasons: [`Delegation retired: ${retired.reason}`] } : await checkIntegrationReadiness(root, taskId);
     items.push({
       taskId,
       provider: result?.provider ?? packet?.provider ?? null,
       access: packet?.access ?? null,
-      status: result?.status ?? 'pending',
+      status: retired ? 'retired' : (result?.status ?? 'pending'),
       review: reviewStatus(await readJson(delegationPaths(root, taskId).review, null)),
       ...readiness,
     });
