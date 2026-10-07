@@ -1,10 +1,8 @@
 import path from 'node:path';
-import { readdir } from 'node:fs/promises';
-import { fileExists, readJson } from '../lib/files.mjs';
-import { hafezPaths, loadProjectState } from './state.mjs';
 import { hasWriterReservation } from './delegation.mjs';
 import { planDelegationTopology } from './orchestrator.mjs';
 import { executeDelegationAndIngest, prepareDelegation, providerStatus } from './providers.mjs';
+import { loadActiveSlice, updateWorkUnitStatus } from './work-units.mjs';
 
 function unitText(value) {
   return typeof value === 'string' ? value : value?.objective ?? '';
@@ -12,22 +10,6 @@ function unitText(value) {
 
 function isStructuredUnit(unit) {
   return unit && typeof unit === 'object' && !Array.isArray(unit) && typeof unit.id === 'string';
-}
-
-async function activeSliceDocument(root) {
-  const managed = await loadProjectState(root);
-  if (!managed) throw new Error('Project is not adopted. Run `hafez start .` or `hafez adopt . --apply` first.');
-  const activeSlice = managed.state.activeSlice;
-  if (!activeSlice) return { managed, activeSlice: null, slicePath: null, slice: null };
-
-  const directory = path.join(root, 'docs', 'hafez', 'slices');
-  if (!fileExists(directory)) throw new Error(`Active slice ${activeSlice} is recorded but docs/hafez/slices does not exist.`);
-  const entries = await readdir(directory);
-  const matches = entries.filter((name) => name.startsWith(`${activeSlice}-`) && name.endsWith('.json'));
-  if (matches.length === 0) throw new Error(`Active slice document not found for ${activeSlice}.`);
-  if (matches.length > 1) throw new Error(`Multiple slice documents match ${activeSlice}; resolve the duplicate before dispatch.`);
-  const slicePath = path.join(directory, matches[0]);
-  return { managed, activeSlice, slicePath, slice: await readJson(slicePath, null) };
 }
 
 function validateWorkGraph(units) {
@@ -105,7 +87,7 @@ function assignmentFor(unit, topology, scoutIndex, writerAvailable) {
 
 export async function buildDispatchPlan(root, options = {}) {
   const resolvedRoot = path.resolve(root);
-  const context = await activeSliceDocument(resolvedRoot);
+  const context = await loadActiveSlice(resolvedRoot);
   if (!context.slice) {
     return {
       schemaVersion: 'hds-dispatch-plan/v1',
@@ -203,7 +185,9 @@ export async function prepareDispatch(root, options = {}) {
       allowedCommands: unit.verification ?? [],
       workerTier: unit.workerTier,
       reviewRequired: unit.access === 'write-worktree',
+      workUnitId: unit.id,
     });
+    await updateWorkUnitStatus(plan.root, unit.id, 'active');
     packets.push({ unitId: unit.id, packet });
     if (options.execute === true) {
       const execution = await executeDelegationAndIngest(packet);
