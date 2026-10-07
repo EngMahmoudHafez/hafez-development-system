@@ -353,3 +353,45 @@ test('standalone lead review parses provider output and records exact revision a
   assert.equal(review.reviewedRevision, head);
   assert.equal(review.verdict, 'approved');
 });
+
+
+test('provider prompt includes bounded operational attempt memory for smarter retries', () => {
+  const packet = {
+    id: 'task-2',
+    role: 'specialist',
+    access: 'read-only',
+    projectRoot: '/project',
+    baseRevision: 'abc123',
+    task: 'Try a different approach.',
+    allowedPaths: [],
+    allowedCommands: [],
+    workerTier: 'specialist',
+    model: null,
+    packetPath: '/tmp/task-2.json',
+    operatingContext: {
+      activeSlice: 'S-01',
+      workUnitId: 'WU-01',
+      architectureProfile: null,
+      autonomyMode: 'continue-until-decision',
+      serializedPaths: [],
+      requiredGates: [],
+    },
+    attemptMemory: [{
+      taskId: 'task-1',
+      provider: 'codex',
+      workerTier: 'worker',
+      attempt: 1,
+      status: 'failed',
+      summary: 'Null input was not handled.',
+      blockers: ['Parser regression still fails.'],
+      reviewVerdict: 'rejected',
+      reviewSummary: 'Add a regression test and avoid the same parsing branch.',
+    }],
+  };
+
+  const invocation = providerInvocation('gemini', packet);
+  assert.match(invocation.args.join(' '), /Try a different approach/);
+  assert.match(invocation.args.join(' '), /Prior attempt memory/);
+  assert.match(invocation.args.join(' '), /Null input was not handled/);
+  assert.match(invocation.args.join(' '), /not hidden reasoning/);
+});
