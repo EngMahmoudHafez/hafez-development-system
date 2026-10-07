@@ -11,11 +11,17 @@ Start with `hafez autopilot <path> --json` when the runtime is available. If the
 
 Before dispatching helpers, run `hafez delegation-plan <path> --json` when available. Use its zero-config topology unless the project has an explicit provider policy.
 
+For an active slice, run `hafez dispatch-plan <path> --json` before manual delegation:
+- if `needsDecomposition=true`, use `hafez-decompose` to persist structured work units in the active slice;
+- otherwise run `hafez dispatch <path> --execute --json` to create and execute the currently dispatchable helper packets;
+- feed each returned packet into `hafez delegation-cycle <task-id>` until it is reviewed/integrated/verified or reaches a real owner boundary;
+- after each completed work unit, run `hafez dispatch-plan` again so newly unblocked dependencies can start.
+
 Then loop until completion or a genuine decision boundary:
 
 1. Read the returned next action, active slice, blockers, Git state, and required gates.
 2. If the action is deterministic, let Hafez execute it.
-3. If the action needs agent work, perform it yourself or delegate bounded independent work.
+3. If the action needs agent work, inspect the active slice's structured work units first. Perform lead-owned units yourself and delegate only the units Hafez marks dispatchable.
 4. Prefer lower-cost/helper models for reconnaissance, repetitive implementation, test writing, documentation, and narrow refactors.
 5. Keep the strongest available model as lead for decomposition, architecture decisions, conflict resolution, security-sensitive review, and final acceptance.
 6. Use read-only scouts in parallel when useful. Keep write-capable delegates isolated and serialized unless scopes are provably independent and the runtime supports safe isolation.

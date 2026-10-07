@@ -34,7 +34,16 @@ export function gitRepositoryState(root) {
     run('git', ['status', '--porcelain=v1', '-z'], { cwd: root, timeout: 10_000 }),
     'inspect the repository status',
   );
-  return { root: path.resolve(repositoryRoot), baseRevision, dirty: status.stdout.length > 0 };
+  const sourceStatus = requireSuccessfulGit(
+    run('git', ['status', '--porcelain=v1', '-z', '--', '.', ':(exclude).hafez/**', ':(exclude)docs/hafez/**', ':(exclude)AGENTS.md'], { cwd: root, timeout: 10_000 }),
+    'inspect the repository source status',
+  );
+  return {
+    root: path.resolve(repositoryRoot),
+    baseRevision,
+    dirty: status.stdout.length > 0,
+    sourceDirty: sourceStatus.stdout.length > 0,
+  };
 }
 
 export async function createManagedWorktree(root, { taskId, baseRevision }) {

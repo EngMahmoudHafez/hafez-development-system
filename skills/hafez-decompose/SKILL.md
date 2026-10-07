@@ -11,9 +11,11 @@ verifiable concern.
 Read the active slice, current Git state, architecture policy, serialized paths, gates, and relevant
 contracts. Produce a small execution graph rather than a generic checklist.
 
+Persist the result directly into the active slice's `workUnits` array. Use structured objects, not prose strings.
+
 For each work unit record:
 
-- id and objective;
+- id in `WU-01` form and objective;
 - dependency ids;
 - risk: low, medium, high;
 - worker tier: scout, worker, specialist, or lead;
@@ -22,7 +24,8 @@ For each work unit record:
 - allowed paths;
 - required verification commands;
 - acceptance criteria owned by the unit;
-- integration notes for shared contracts/files.
+- integration notes for shared contracts/files;
+- initial status: `planned`.
 
 Routing rules:
 
@@ -39,8 +42,11 @@ Routing rules:
 - Prefer the smallest unit that can be independently reviewed and verified; do not fragment trivial
   edits into delegation overhead.
 
-After decomposition, use `hafez delegation-plan` for provider availability, then
-`hafez-delegate`/autopilot to dispatch units. Every write result returns through `hafez-review`.
+After decomposition, run `hafez dispatch-plan` to validate dependencies and scheduling, then
+`hafez dispatch --execute` to start the currently ready helper units. Every write result returns through
+`hafez-review`; successful scout results and verified writer integrations advance their work-unit
+status automatically. Mark lead-owned units with `hafez work-unit-status <WU-ID> --status completed`
+when their acceptance criteria are satisfied.
 
 Do not ask the project owner to choose worker allocation, file ownership, test strategy, or other
 technical decomposition details that the lead can determine from repository evidence.

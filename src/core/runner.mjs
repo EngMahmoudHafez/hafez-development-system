@@ -7,6 +7,8 @@ import { inspectProject } from './inspector.mjs';
 import { adoptProject } from './state.mjs';
 import { readJson, writeJson } from '../lib/files.mjs';
 import { isDestructiveDecision, ownerDecisionItems, requiresExternalAuthority } from './decision-policy.mjs';
+import { buildDispatchPlan, prepareDispatch } from './work-dispatch.mjs';
+import { completeActiveSlice } from './work-units.mjs';
 
 const DEFAULT_MAX_STEPS = 8;
 const MAX_ALLOWED_STEPS = 100;
@@ -249,8 +251,68 @@ function boundaryTransition(resume, managed, continuous) {
   return { phase: 'choose-safe-action', outcome, traceResult: outcome?.reason ?? 'clear' };
 }
 
-function actionTransition(resume, managed, continuous) {
-  const action = chooseAction(resume, managed, continuous);
+async function continuousSliceAction(resume, managed) {
+  if (!resume.activeSlice) return null;
+  const plan = await buildDispatchPlan(resume.root);
+  if (plan.needsDecomposition) {
+    return agentAction(
+      'decompose-active-slice',
+      `Decompose ${resume.activeSlice} into structured dependency-aware work units before implementation.`,
+      'planning-only',
+    );
+  }
+
+  const dispatchable = plan.units.filter((unit) => unit.dispatch?.action === 'delegate' && unit.dispatch.dispatchable);
+  if (dispatchable.length > 0) {
+    return agentAction(
+      'dispatch-ready-work',
+      `Dispatch ready work units: ${dispatchable.map((unit) => unit.id).join(', ')}.`,
+      'active-slice-dispatch',
+    );
+  }
+
+  const leadOwned = plan.units.filter((unit) => unit.dispatch?.action === 'lead' && unit.status !== 'completed');
+  if (leadOwned.length > 0) {
+    return agentAction(
+      'execute-lead-work-units',
+      `Complete lead-owned work units: ${leadOwned.map((unit) => unit.id).join(', ')}.`,
+      'active-slice-lead',
+    );
+  }
+
+  const active = plan.units.filter((unit) => unit.status === 'active');
+  if (active.length > 0) {
+    return agentAction(
+      'continue-active-delegations',
+      `Continue active delegated work units: ${active.map((unit) => unit.id).join(', ')}.`,
+      'delegation-cycle',
+    );
+  }
+
+  const blocked = plan.units.filter((unit) => unit.status === 'blocked');
+  if (blocked.length > 0) {
+    return agentAction(
+      'resolve-work-unit-blockers',
+      `Resolve blocked work units: ${blocked.map((unit) => unit.id).join(', ')}.`,
+      'technical-recovery',
+    );
+  }
+
+  if (plan.units.length > 0 && plan.units.every((unit) => unit.status === 'completed')) {
+    return verificationAction(
+      'verify-completed-slice',
+      `Run required gates for completed slice ${resume.activeSlice} before final acceptance.`,
+    );
+  }
+
+  return null;
+}
+
+async function actionTransition(resume, managed, continuous) {
+  const baseAction = chooseAction(resume, managed, continuous);
+  const action = continuous && baseAction.id === 'continue-active-slice'
+    ? (await continuousSliceAction(resume, managed) ?? baseAction)
+    : baseAction;
   const outcome = stop('ready', 'action-queued', {
     nextSafeAction: action.description,
     decisionBoundary: 'The runner plans actions only; an authorized agent or user must execute the queued action.',
@@ -318,13 +380,24 @@ export async function runAutonomous(inputPath = '.', options = {}) {
     trace.push({ step: trace.length + 1, phase: machine.phase, result: transition.traceResult });
     if (transition.action) {
       actions.push(transition.action);
-      if (execute && ['preview-verification', 'verify-current-work'].includes(transition.action.id)) {
+      if (execute && ['preview-verification', 'verify-current-work', 'verify-completed-slice'].includes(transition.action.id)) {
         transition.action.autoExecuted = true;
         transition.action.result = await verifyProject(root);
+        if (transition.action.id === 'verify-completed-slice' && transition.action.result.allPassed) {
+          transition.action.sliceCompletion = await completeActiveSlice(root);
+        }
         machine = { root, phase: 'resume', resume: null, managed: null, continuous: autoAdopt };
         continue;
       }
-      if (execute && transition.action.id === 'create-handoff') {
+      if (execute && transition.action.id === 'dispatch-ready-work') {
+        transition.action.autoExecuted = true;
+        transition.action.result = await prepareDispatch(root, { execute: true, maxSteps });
+        outcome = stop('ready', 'delegations-dispatched', {
+          continuationRequired: true,
+          decisionBoundary: null,
+          nextSafeAction: 'Review returned delegation cycles, handle lead review if requested, then continue autopilot.',
+        });
+      } else if (execute && transition.action.id === 'create-handoff') {
         transition.action.autoExecuted = true;
         transition.action.result = await createHandoff(root);
         outcome = stop('completed', 'handoff-created', {

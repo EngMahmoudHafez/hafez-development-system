@@ -16,6 +16,8 @@ import { validateProjectMetadata } from './core/metadata-validator.mjs';
 import { migrateFiles, migrationTargets } from './core/migrations.mjs';
 import { initializeWorkspace, inspectWorkspace, verifyWorkspace } from './core/workspace.mjs';
 import { abortDelegation, checkIntegrationReadiness, ingestDelegationResult, integrateDelegation, listIntegrationQueue, readDelegationContext, recordDelegationReview } from './core/delegation.mjs';
+import { buildDispatchPlan, prepareDispatch } from './core/work-dispatch.mjs';
+import { updateWorkUnitStatus } from './core/work-units.mjs';
 
 const help = `Hafez Development System
 
@@ -43,6 +45,9 @@ Usage:
   hafez delegation-abort <task-id> [--path <path>]
   hafez integration-queue [path] [--json]
   hafez delegation-plan [path] [--json]
+  hafez dispatch-plan [path] [--json]
+  hafez dispatch [path] [--execute] [--json]
+  hafez work-unit-status <WU-ID> --status <status> [--path <path>] [--json]
   hafez validate [path] [--json]
   hafez migrate [path-or-file] [--apply] [--json]
   hafez workspace [path] [--init --repository <id=relative-path> --apply] [--json]
@@ -173,6 +178,8 @@ async function runProjectCommand(command, targetPath, flags) {
   if (command === 'workspace-verify') return verifyWorkspace(targetPath, { execute: Boolean(flags.execute) });
   if (command === 'integration-queue') return listIntegrationQueue(path.resolve(targetPath));
   if (command === 'delegation-plan') return planDelegationTopology();
+  if (command === 'dispatch-plan') return buildDispatchPlan(path.resolve(targetPath));
+  if (command === 'dispatch') return prepareDispatch(path.resolve(targetPath), { execute: Boolean(flags.execute) });
   throw new Error(`Unknown command: ${command}`);
 }
 
@@ -277,6 +284,14 @@ async function runDelegationIntegrate(positionals, flags) {
   return integrateDelegation(path.resolve(flags.path || '.'), taskId);
 }
 
+async function runWorkUnitStatus(positionals, flags) {
+  const workUnitId = positionals[1];
+  if (!workUnitId || !flags.status) {
+    throw new Error('Usage: hafez work-unit-status <WU-ID> --status <status> [--path <path>]');
+  }
+  return updateWorkUnitStatus(path.resolve(flags.path || '.'), workUnitId, flags.status);
+}
+
 async function runDelegationAbort(positionals, flags) {
   const taskId = positionals[1];
   if (!taskId) throw new Error('Usage: hafez delegation-abort <task-id> [--path <path>]');
@@ -306,6 +321,7 @@ export async function main(argv) {
   else if (command === 'delegation-review') result = await runDelegationReview(positionals, flags);
   else if (command === 'delegation-integrate') result = await runDelegationIntegrate(positionals, flags);
   else if (command === 'delegation-abort') result = await runDelegationAbort(positionals, flags);
+  else if (command === 'work-unit-status') result = await runWorkUnitStatus(positionals, flags);
   else result = await runProjectCommand(command, positionals[1] || flags.path || '.', flags);
   print(result, Boolean(flags.json));
 }

@@ -50,6 +50,7 @@ test('Git inspection separates Hafez metadata dirtiness from source dirtiness', 
 
   await mkdir(path.join(root, '.hafez'));
   await writeFile(path.join(root, '.hafez', 'state.json'), '{}\n');
+  await writeFile(path.join(root, 'AGENTS.md'), '# Generated Hafez guidance\n');
 
   const metadataOnly = inspectGit(root);
   assert.equal(metadataOnly.dirty, true);
