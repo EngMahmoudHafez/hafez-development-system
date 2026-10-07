@@ -141,6 +141,12 @@
     },
     "reviewRequired": {
       "type": "boolean"
+    },
+    "model": {
+      "type": [
+        "string",
+        "null"
+      ]
     }
   },
   "additionalProperties": false
