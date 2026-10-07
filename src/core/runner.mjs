@@ -484,11 +484,13 @@ export async function runAutonomous(inputPath = '.', options = {}) {
           continue;
         } else {
           outcome = autoAdopt
-            ? stop('ready', transition.action.result.reason, {
+            ? stop('ready', transition.action.result.reason === 'no-repair-provider' ? 'lead-action-required' : transition.action.result.reason, {
               continuationRequired: true,
               decisionBoundary: null,
-              nextSafeAction: transition.action.result.nextSafeAction
-                ?? 'Continue technical repair with a stronger or revised engineering approach.',
+              nextSafeAction: transition.action.result.reason === 'no-repair-provider'
+                ? 'No standalone repair provider is available; let the host lead repair the required gates and rerun autopilot.'
+                : (transition.action.result.nextSafeAction
+                  ?? 'Continue technical repair with a stronger or revised engineering approach.'),
             })
             : stop('paused', 'agent-action-required', {
               decisionBoundary: 'A lead agent must continue the technical repair.',
