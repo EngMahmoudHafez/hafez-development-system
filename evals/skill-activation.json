@@ -158,7 +158,10 @@
         "hafez-autopilot",
         "hafez-debug",
         "hafez-review",
-        "hafez-decompose"
+        "hafez-decompose",
+        "hafez-database",
+        "hafez-api-contract",
+        "hafez-security"
       ]
     },
     {
@@ -220,6 +223,42 @@
       ],
       "rejects": [
         "hafez-adopt",
+        "hafez-handoff"
+      ]
+    },
+    {
+      "id": "direct-database-safety",
+      "kind": "direct",
+      "prompt": "This Laravel migration touches a 15 million row table. Review locking, indexes, backfill strategy, rollback, and make the safest migration plan.",
+      "activates": [
+        "hafez-database"
+      ],
+      "rejects": [
+        "hafez-nuxt-vue",
+        "hafez-handoff"
+      ]
+    },
+    {
+      "id": "direct-api-contract",
+      "kind": "direct",
+      "prompt": "Update this API and OpenAPI contract, regenerate the client, and make sure the frontend remains compatible without hiding a breaking change.",
+      "activates": [
+        "hafez-api-contract"
+      ],
+      "rejects": [
+        "hafez-database",
+        "hafez-handoff"
+      ]
+    },
+    {
+      "id": "direct-security-review",
+      "kind": "direct",
+      "prompt": "Audit this authentication and file-upload flow for authorization bypass, secret leakage, unsafe uploads, and abuse issues, then fix clear reversible defects.",
+      "activates": [
+        "hafez-security"
+      ],
+      "rejects": [
+        "hafez-plan-slice",
         "hafez-handoff"
       ]
     }
