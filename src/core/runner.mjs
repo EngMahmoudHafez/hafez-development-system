@@ -308,8 +308,10 @@ async function continuousSliceAction(resume, managed) {
 }
 
 async function actionTransition(resume, managed, continuous) {
-  const action = (continuous ? await continuousSliceAction(resume, managed) : null)
-    ?? chooseAction(resume, managed, continuous);
+  const baseAction = chooseAction(resume, managed, continuous);
+  const action = continuous && baseAction.id === 'continue-active-slice'
+    ? (await continuousSliceAction(resume, managed) ?? baseAction)
+    : baseAction;
   const outcome = stop('ready', 'action-queued', {
     nextSafeAction: action.description,
     decisionBoundary: 'The runner plans actions only; an authorized agent or user must execute the queued action.',
