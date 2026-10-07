@@ -278,3 +278,102 @@ test('lead-owned work falls back to the host when no standalone lead provider is
   assert.equal(plan.units[0].dispatch.provider, null);
   assert.equal(plan.units[0].dispatch.reason, 'host-lead-required');
 });
+
+
+test('parallel-safe scouts run across providers concurrently while each provider stays serialized', async () => {
+  const fixture = await sliceFixture([
+    unit({ id: 'WU-01', objective: 'Scout A.' }),
+    unit({ id: 'WU-02', objective: 'Scout B.' }),
+    unit({ id: 'WU-03', objective: 'Scout C.' }),
+    unit({ id: 'WU-04', objective: 'Scout D.' }),
+  ]);
+
+  let globalActive = 0;
+  let globalMax = 0;
+  const providerActive = new Map();
+  const providerMax = new Map();
+
+  const executePacket = async (packet) => {
+    globalActive += 1;
+    globalMax = Math.max(globalMax, globalActive);
+    const active = (providerActive.get(packet.provider) ?? 0) + 1;
+    providerActive.set(packet.provider, active);
+    providerMax.set(packet.provider, Math.max(providerMax.get(packet.provider) ?? 0, active));
+
+    await new Promise((resolve) => setTimeout(resolve, 40));
+
+    providerActive.set(packet.provider, providerActive.get(packet.provider) - 1);
+    globalActive -= 1;
+    return {
+      status: 0,
+      providerError: false,
+      result: { status: 'completed' },
+      readiness: { ready: false, reasons: [] },
+    };
+  };
+
+  const dispatched = await prepareDispatch(fixture.root, {
+    providerStatus: providers,
+    execute: true,
+    cycle: true,
+    executePacket,
+    runCycle: async (root, taskId) => ({
+      status: 'completed',
+      reason: 'scout-evidence-ready',
+      continuationRequired: true,
+      currentTaskId: taskId,
+      trace: [],
+    }),
+  });
+
+  assert.equal(dispatched.executions.length, 4);
+  assert.ok(globalMax >= 2, `expected cross-provider concurrency, got ${globalMax}`);
+  assert.equal(providerMax.get('gemini'), 1);
+  assert.equal(providerMax.get('codex'), 1);
+});
+
+test('serialized work starts only after the parallel scout phase finishes', async () => {
+  const fixture = await sliceFixture([
+    unit({ id: 'WU-01', objective: 'Scout first.' }),
+    unit({
+      id: 'WU-02',
+      objective: 'Lead analysis after scout phase.',
+      role: 'lead',
+      workerTier: 'lead',
+      access: 'read-only',
+      parallelSafe: false,
+      acceptanceCriteria: ['Lead analysis completes.'],
+    }),
+  ]);
+
+  const events = [];
+  const executePacket = async (packet) => {
+    events.push(`start:${packet.workerTier}:${packet.id}`);
+    if (packet.workerTier === 'scout') await new Promise((resolve) => setTimeout(resolve, 30));
+    events.push(`end:${packet.workerTier}:${packet.id}`);
+    return {
+      status: 0,
+      providerError: false,
+      result: { status: 'completed' },
+      readiness: { ready: false, reasons: [] },
+    };
+  };
+
+  await prepareDispatch(fixture.root, {
+    providerStatus: providers,
+    execute: true,
+    executePacket,
+    runCycle: async (root, taskId) => ({
+      status: 'completed',
+      reason: 'scout-evidence-ready',
+      continuationRequired: true,
+      currentTaskId: taskId,
+      trace: [],
+    }),
+  });
+
+  const scoutEnd = events.findIndex((event) => event.startsWith('end:scout:'));
+  const leadStart = events.findIndex((event) => event.startsWith('start:lead:'));
+  assert.ok(scoutEnd >= 0);
+  assert.ok(leadStart > scoutEnd, `lead started before scout phase finished: ${events.join(', ')}`);
+});
