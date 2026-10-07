@@ -1,0 +1,4 @@
+interface:
+  display_name: "Hafez — API Contract"
+  short_description: "OpenAPI, compatibility, generated clients, and drift"
+  default_prompt: "Use $hafez-api-contract to verify this API boundary end-to-end, repair safe contract drift, and stop only for a material breaking-change decision."
