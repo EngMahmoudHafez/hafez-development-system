@@ -150,3 +150,32 @@ test('failed writer attempt is retired and automatically replaced with a retry p
   assert.equal(retired.status, 'retired');
   assert.equal(active.status, 'pending');
 });
+
+
+test('provider failures fail over to another available helper before escalating tier', () => {
+  const packet = {
+    access: 'write-worktree',
+    provider: 'codex',
+    workerTier: 'worker',
+    attempt: 1,
+    reviewRequired: true,
+  };
+  const result = {
+    status: 'failed',
+    failureKind: 'provider',
+    blockers: ['Provider execution failed before a valid structured result was produced.'],
+    verification: [],
+  };
+  const decision = decideDelegationContinuation(packet, result, null, {
+    providerStatus: {
+      codex: { installed: true, configured: true, kind: 'agent-cli' },
+      claude: { installed: true, configured: true, kind: 'agent-cli' },
+      gemini: { installed: true, configured: true, kind: 'agent-cli' },
+    },
+  });
+
+  assert.equal(decision.action, 'retry');
+  assert.equal(decision.reason, 'provider-failure-failover');
+  assert.equal(decision.nextProvider, 'claude');
+  assert.equal(decision.nextTier, 'worker');
+});
