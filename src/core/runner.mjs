@@ -54,6 +54,39 @@ function matchesAny(text, patterns) {
   return patterns.some((pattern) => pattern.test(text));
 }
 
+const ownerDecisionPatterns = [
+  /\bpricing\b/i,
+  /\bbilling\b/i,
+  /\bbusiness model\b/i,
+  /\bproduct decision\b/i,
+  /\buser-visible behavior\b/i,
+  /\bbreak(?:ing)? change\b/i,
+  /\bbackward compatibility\b/i,
+  /\bpublic api\b.*\b(change|shape|contract|version)\b/i,
+  /\bauth(?:entication)? strategy\b/i,
+  /\bdata retention\b/i,
+  /\blegal\b/i,
+  /\bcompliance\b/i,
+  /\bprivacy\b/i,
+  /\barchitecture decision\b/i,
+];
+
+function explicitlyRequiresOwner(value) {
+  return Boolean(value && typeof value === 'object' && value.requiresOwner === true);
+}
+
+function isOwnerDecision(value) {
+  if (explicitlyRequiresOwner(value)) return true;
+  const text = valueText(value);
+  return matchesAny(text, ownerDecisionPatterns)
+    || matchesAny(text, externalAuthorityPatterns)
+    || matchesAny(text, destructivePatterns);
+}
+
+function ownerDecisionQuestions(state) {
+  return (state.openQuestions ?? []).filter(isOwnerDecision);
+}
+
 function stop(status, reason, details = {}) {
   return { status, reason, ...details };
 }
@@ -113,10 +146,13 @@ function recordedBoundary(resume, state, project, continuous = false) {
   }
 
   if ((state.openQuestions ?? []).length > 0) {
-    return stop('paused', 'decision-required', {
-      questions: state.openQuestions,
-      decisionBoundary: 'The project state contains unresolved questions that require an explicit decision.',
-    });
+    const ownerQuestions = continuous ? ownerDecisionQuestions(state) : state.openQuestions;
+    if (!continuous || ownerQuestions.length > 0) {
+      return stop('paused', 'decision-required', {
+        questions: ownerQuestions,
+        decisionBoundary: 'The remaining question materially affects product behavior, architecture, external authority, or project-owner intent.',
+      });
+    }
   }
 
   return null;
@@ -207,6 +243,14 @@ function chooseAction(resume, managed, continuous = false) {
       'resolve-technical-blockers',
       'Investigate and resolve the recorded technical blockers, using scouts or debug delegation when useful.',
       'technical-recovery',
+    );
+  }
+
+  if (continuous && (state.openQuestions ?? []).length > 0) {
+    return agentAction(
+      'resolve-technical-questions',
+      'Resolve the recorded non-material technical questions from repository evidence and continue without project-owner interruption.',
+      'technical-analysis',
     );
   }
 
