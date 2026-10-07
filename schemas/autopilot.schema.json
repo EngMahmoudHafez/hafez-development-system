@@ -76,6 +76,42 @@
         "proposedAction"
       ],
       "additionalProperties": false
+    },
+    "progressFingerprint": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "noProgressCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "strategyEscalation": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "level": {
+          "enum": [
+            "specialist",
+            "lead"
+          ]
+        },
+        "reason": {
+          "type": "string"
+        },
+        "instruction": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "level",
+        "reason",
+        "instruction"
+      ],
+      "additionalProperties": false
     }
   },
   "additionalProperties": false
