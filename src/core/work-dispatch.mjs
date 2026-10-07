@@ -180,13 +180,32 @@ function taskForUnit(plan, unit) {
   ].filter(Boolean).join('\n');
 }
 
+function providerSerializedExecutor(executePacket) {
+  const lanes = new Map();
+  return async (packet) => {
+    const provider = packet.provider;
+    const previous = lanes.get(provider) ?? Promise.resolve();
+    const execution = previous.catch(() => {}).then(() => executePacket(packet));
+    let lane;
+    lane = execution.finally(() => {
+      if (lanes.get(provider) === lane) lanes.delete(provider);
+    });
+    lanes.set(provider, lane);
+    return execution;
+  };
+}
+
 async function executePreparedPacket(plan, entry, options) {
   const executePacket = options.executePacket ?? executeDelegationAndIngest;
   const cyclePacket = options.runCycle ?? runDelegationCycle;
   const execution = await executePacket(entry.packet);
   const cycle = options.cycle === false
     ? null
-    : await cyclePacket(plan.root, entry.packet.id, { maxSteps: options.maxSteps });
+    : await cyclePacket(plan.root, entry.packet.id, {
+      maxSteps: options.maxSteps,
+      executePacket,
+      providerStatus: options.providerStatus,
+    });
   return { unitId: entry.unitId, packetId: entry.packet.id, execution, cycle };
 }
 
@@ -240,6 +259,9 @@ export async function prepareDispatch(root, options = {}) {
     };
   }
 
+  const serializedExecutePacket = providerSerializedExecutor(options.executePacket ?? executeDelegationAndIngest);
+  const executionOptions = { ...options, executePacket: serializedExecutePacket };
+
   const parallelScouts = packets.filter(({ unit, packet }) => (
     packet.access === 'read-only'
       && unit.parallelSafe === true
@@ -248,9 +270,9 @@ export async function prepareDispatch(root, options = {}) {
   const serialized = packets.filter((entry) => !parallelScouts.includes(entry));
 
   const executions = [];
-  executions.push(...await executeScoutGroups(plan, parallelScouts, options));
+  executions.push(...await executeScoutGroups(plan, parallelScouts, executionOptions));
   for (const entry of serialized) {
-    executions.push(await executePreparedPacket(plan, entry, options));
+    executions.push(await executePreparedPacket(plan, entry, executionOptions));
   }
 
   const executionOrder = new Map(packets.map((entry, index) => [entry.unitId, index]));
