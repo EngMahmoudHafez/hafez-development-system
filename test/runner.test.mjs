@@ -376,3 +376,91 @@ test('autopilot persists the exact owner decision context across sessions', asyn
   assert.match(autopilot.ownerDecision.items[0].question, /pricing/i);
   assert.match(autopilot.ownerDecision.boundary, /materially affects/i);
 });
+
+
+async function writeStructuredSlice(root, workUnits) {
+  const managed = await loadProjectState(root);
+  managed.state.activeSlice = 'S-01';
+  managed.state.workflowState = 'in-progress';
+  await saveState(root, managed.state);
+  const directory = path.join(root, 'docs', 'hafez', 'slices');
+  const filePath = path.join(directory, 'S-01-runner-dispatch.json');
+  await writeFile(filePath, JSON.stringify({
+    schemaVersion: 'hds-slice/v1',
+    id: 'S-01',
+    title: 'Runner dispatch',
+    objective: 'Exercise structured work units.',
+    status: 'in-progress',
+    businessRules: [],
+    acceptanceCriteria: ['All work units complete.'],
+    dependencies: [],
+    decisions: [],
+    workUnits,
+    verification: [],
+    openQuestions: [],
+  }, null, 2));
+  return filePath;
+}
+
+function completedWorkUnit(id = 'WU-01') {
+  return {
+    id,
+    objective: 'Complete bounded work.',
+    role: 'implementer',
+    dependencies: [],
+    risk: 'low',
+    workerTier: 'worker',
+    access: 'write-worktree',
+    parallelSafe: false,
+    allowedPaths: ['src'],
+    verification: [],
+    acceptanceCriteria: ['Work is complete.'],
+    integrationNotes: '',
+    status: 'completed',
+  };
+}
+
+test('autopilot closes a completed slice after passing verification and then hands off once', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'hds-runner-slice-complete-'));
+  await writeFile(path.join(root, 'package.json'), JSON.stringify({
+    name: 'slice-complete-fixture',
+    scripts: { test: 'node -e "process.exit(0)"' },
+  }, null, 2));
+  await adoptProject(await inspectProject(root));
+  const slicePath = await writeStructuredSlice(root, [completedWorkUnit()]);
+
+  const result = await runAutonomous(root, { execute: true, autoAdopt: true, maxSteps: 12 });
+
+  assert.equal(result.status, 'completed');
+  assert.equal(result.reason, 'handoff-created');
+  assert.equal(result.actions.filter((action) => action.id === 'verify-completed-slice').length, 1);
+
+  const managed = await loadProjectState(root);
+  assert.equal(managed.state.activeSlice, null);
+  assert.equal(managed.state.workflowState, 'handed-off');
+
+  const slice = JSON.parse(await readFile(slicePath, 'utf8'));
+  assert.equal(slice.status, 'ready');
+});
+
+test('failed verification keeps the completed-work slice active for technical repair', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'hds-runner-slice-fail-'));
+  await writeFile(path.join(root, 'package.json'), JSON.stringify({
+    name: 'slice-fail-fixture',
+    scripts: { test: 'node -e "process.exit(1)"' },
+  }, null, 2));
+  await adoptProject(await inspectProject(root));
+  const slicePath = await writeStructuredSlice(root, [completedWorkUnit()]);
+
+  const result = await runAutonomous(root, { execute: true, autoAdopt: true, maxSteps: 12 });
+
+  assert.equal(result.status, 'ready');
+  assert.equal(result.reason, 'lead-action-required');
+  assert.equal(result.actions.at(-1).id, 'debug-required-gates');
+
+  const managed = await loadProjectState(root);
+  assert.equal(managed.state.activeSlice, 'S-01');
+
+  const slice = JSON.parse(await readFile(slicePath, 'utf8'));
+  assert.equal(slice.status, 'in-progress');
+});
