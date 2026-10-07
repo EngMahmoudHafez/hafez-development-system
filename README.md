@@ -93,7 +93,9 @@ hafez init . --architecture-profile laravel-domain-slices-v1 --apply
                          # explicitly opt in to the strict Laravel baseline
 hafez run .              # show one bounded next action
 hafez run . --execute    # execute deterministic gates/handoffs
-hafez autopilot .        # safe auto-adopt + continuous host-agent loop
+hafez start .            # simplest: safe auto-adopt + continuous host-agent loop
+hafez autopilot .        # same continuous mode, explicit name
+hafez autopilot-status . # show continuity, owner boundary, providers, and delegation queue
 hafez delegation-next <task-id>      # decide review/retry/escalate/integrate/owner boundary
 hafez delegation-continue <task-id>  # retire failed attempt and create the next retry/escalation packet
 ```
