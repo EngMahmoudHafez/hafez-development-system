@@ -242,3 +242,19 @@ test('stale committed source takes priority over verifying newer dirty work', as
   assert.equal(result.actions[0].id, 'reconcile-project-state');
   assert.equal(result.actions[0].scope, 'read-only-analysis');
 });
+
+
+test('autopilot safely adopts an unmanaged project before selecting work', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'hds-autopilot-adopt-'));
+  await writeFile(path.join(root, 'package.json'), JSON.stringify({
+    name: 'autopilot-fixture',
+    scripts: { test: 'node -e "process.exit(0)"' },
+  }, null, 2));
+
+  const result = await runAutonomous(root, { execute: true, autoAdopt: true, maxSteps: 8 });
+
+  assert.equal(result.mode, 'autopilot');
+  assert.ok(result.adopted);
+  assert.notEqual(result.reason, 'adoption-required');
+  assert.ok(await loadProjectState(root));
+});
