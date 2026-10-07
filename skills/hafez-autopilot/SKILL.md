@@ -20,9 +20,17 @@ Then loop until completion or a genuine decision boundary:
 5. Keep the strongest available model as lead for decomposition, architecture decisions, conflict resolution, security-sensitive review, and final acceptance.
 6. Use read-only scouts in parallel when useful. Keep write-capable delegates isolated and serialized unless scopes are provably independent and the runtime supports safe isolation.
 7. Every write-capable delegation requires a lead review before integration. Use `hafez-review`.
-8. Integrate only approved results with `hafez delegation-integrate <task-id>`.
-9. Run required gates after integration. If they fail, diagnose, repair, and rerun automatically.
-10. Re-run `hafez autopilot <path> --json` after every meaningful transition.
+8. After every worker result or lead review, run `hafez delegation-next <task-id> --json` and obey the continuation decision:
+   - `retry`: re-dispatch the same bounded task at the returned attempt;
+   - `escalate`: re-dispatch it at the returned stronger worker tier;
+   - `review`: review the exact revision;
+   - `integrate`: integrate the approved revision;
+   - `lead-takeover`: stop delegating and let the lead repair/implement directly;
+   - `owner-decision`: pause and ask the project owner.
+9. A rejected or failed worker is not a reason to stop. Clean up its abandoned worktree/reservation, preserve the reason in the next packet, and continue using the returned retry/escalation decision.
+10. Integrate only approved results with `hafez delegation-integrate <task-id>`.
+11. Run required gates after integration. If they fail, diagnose, repair, and rerun automatically.
+12. Re-run `hafez autopilot <path> --json` after every meaningful transition.
 
 Do not stop merely because a test fails, a linter reports issues, a worker fails, or a recoverable merge/review problem appears. Repair or re-delegate first.
 
@@ -34,3 +42,17 @@ Stop only for:
 - exhausted available providers when the task cannot be completed by the lead.
 
 Use the repository state, Git, tests, contracts, and command evidence as truth. Never treat worker self-reports as sufficient proof.
+
+
+## Continuous-loop rule
+
+Default to continuation, not interruption. Technical uncertainty is resolved by inspection, scouts,
+tests, narrower experiments, retries, escalation, or lead takeover. Do not ask the project owner to
+choose between implementation details that can be decided from repository evidence.
+
+The owner is consulted only when Hafez identifies a material boundary: product behavior with multiple
+valid outcomes, credentials or production authority, payment/publishing/external communication,
+destructive work, or an explicit architecture choice whose trade-off belongs to the owner.
+
+If the host session ends for any non-decision reason, leave durable state/handoff so the next session
+resumes the same loop rather than treating interruption as approval to stop.
