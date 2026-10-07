@@ -118,3 +118,17 @@ A repeated result without new Git state, gate evidence, or slice progress is not
 When a structured work unit requires `workerTier: lead`, prefer the current host lead when it is actively orchestrating the project. In standalone CLI mode, if a configured Codex, Claude, or Gemini agent CLI is available, Hafez may dispatch that lead-owned unit automatically through the normal isolated delegation contract.
 
 Write-capable standalone lead work still uses a managed worktree, bounded paths/commands, verification, and an independent lead-review provider when one is available. If no standalone lead provider is usable, return the unit to the host lead without treating that as a project-owner decision.
+
+
+## Parallel scout phase
+
+Run independent read-only work units concurrently across different configured providers when they are marked `parallelSafe: true`.
+
+Concurrency rules:
+- different scout providers may run at the same time;
+- tasks assigned to the same provider stay serialized to avoid session/quota collisions;
+- write-capable work remains serialized;
+- non-parallel lead work starts only after the parallel scout phase completes;
+- work-unit status writes are serialized so concurrent scout completion cannot overwrite sibling progress.
+
+Use parallelism to reduce discovery latency, not to weaken isolation or verification.
