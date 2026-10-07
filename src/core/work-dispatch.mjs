@@ -12,6 +12,44 @@ function isStructuredUnit(unit) {
   return unit && typeof unit === 'object' && !Array.isArray(unit) && typeof unit.id === 'string';
 }
 
+function normalizedScope(candidate) {
+  const portable = String(candidate).replaceAll('\\', '/').replace(/^\.\//, '');
+  const value = path.posix.normalize(portable).replace(/\/$/, '');
+  if (!value || path.posix.isAbsolute(value) || /^[a-z]:\//iu.test(value) || value === '..' || value.startsWith('../')) {
+    throw new Error(`Work-unit path must stay inside the repository: ${candidate}`);
+  }
+  return value;
+}
+
+function validateWorkUnitPolicies(context, units) {
+  const serializedPaths = (context.managed?.project?.policies?.serializedPaths ?? []).map(normalizedScope);
+
+  for (const unit of units) {
+    if (unit.workerTier === 'scout' && unit.access !== 'read-only') {
+      throw new Error(`Work unit ${unit.id}: scout units must be read-only.`);
+    }
+    if (unit.risk === 'high' && !['specialist', 'lead'].includes(unit.workerTier)) {
+      throw new Error(`Work unit ${unit.id}: high-risk work requires specialist or lead tier.`);
+    }
+    if (unit.access === 'write-worktree') {
+      if (!Array.isArray(unit.allowedPaths) || unit.allowedPaths.length === 0) {
+        throw new Error(`Work unit ${unit.id}: write work requires at least one allowed path.`);
+      }
+      if (!Array.isArray(unit.verification) || unit.verification.length === 0) {
+        throw new Error(`Work unit ${unit.id}: write work requires at least one verification command.`);
+      }
+      const scopes = unit.allowedPaths.map(normalizedScope);
+      if (unit.parallelSafe === true && scopes.some((scope) => serializedPaths.some((serialized) => (
+        scope === '.' || serialized === '.' || scope === serialized || scope.startsWith(`${serialized}/`) || serialized.startsWith(`${scope}/`)
+      )))) {
+        throw new Error(`Work unit ${unit.id}: touches a serialized project path and cannot be parallelSafe.`);
+      }
+    } else if (Array.isArray(unit.allowedPaths) && unit.allowedPaths.length > 0) {
+      throw new Error(`Work unit ${unit.id}: only write-worktree units may declare allowedPaths.`);
+    }
+  }
+}
+
 function validateWorkGraph(units) {
   const ids = new Set();
   for (const unit of units) {
@@ -126,6 +164,7 @@ export async function buildDispatchPlan(root, options = {}) {
   }
 
   validateWorkGraph(structured);
+  validateWorkUnitPolicies(context, structured);
   const byId = new Map(structured.map((unit) => [unit.id, unit]));
   const topology = options.topology ?? planDelegationTopology(options.providerStatus ?? providerStatus());
   let scoutIndex = 0;
