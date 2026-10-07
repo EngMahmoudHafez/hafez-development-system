@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hafez.dev/schemas/autopilot.schema.json",
+  "title": "HDS autopilot continuity state",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "active",
+    "mode",
+    "startedAt",
+    "updatedAt",
+    "waitingForOwner"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "hds-autopilot/v1"
+    },
+    "active": {
+      "type": "boolean"
+    },
+    "mode": {
+      "const": "continuous"
+    },
+    "startedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "waitingForOwner": {
+      "type": "boolean"
+    },
+    "lastReason": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "nextSafeAction": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "additionalProperties": false
+}

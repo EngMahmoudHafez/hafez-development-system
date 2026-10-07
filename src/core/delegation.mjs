@@ -16,6 +16,7 @@ function delegationPaths(root, taskId) {
     packet: path.join(directory, `${taskId}.json`),
     result: path.join(directory, `${taskId}.result.json`),
     review: path.join(directory, `${taskId}.review.json`),
+    retired: path.join(directory, `${taskId}.retired.json`),
     reservation: path.join(directory, 'writer-reservation.json'),
   };
 }
@@ -96,6 +97,15 @@ export async function readDelegationPacket(root, taskId) {
   return readJson(delegationPaths(root, taskId).packet, null);
 }
 
+export async function readDelegationContext(root, taskId) {
+  const paths = delegationPaths(root, taskId);
+  return {
+    packet: await readJson(paths.packet, null),
+    result: await readJson(paths.result, null),
+    review: await readJson(paths.review, null),
+  };
+}
+
 function assertStringArray(value, field) {
   if (!Array.isArray(value) || value.some((item) => typeof item !== 'string')) {
     throw new Error(`Delegation result field ${field} must be an array of strings.`);
@@ -105,8 +115,16 @@ function assertStringArray(value, field) {
 export function validateDelegationResult(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Delegation result must be a JSON object.');
   if (value.schemaVersion !== 'hds-delegation-result/v1') throw new Error('Unsupported delegation result schema version.');
-  for (const field of ['taskId', 'provider', 'status', 'baseRevision', 'worktreeRevision', 'summary', 'nextAction']) {
+  for (const field of ['taskId', 'provider', 'status', 'summary', 'nextAction']) {
     if (typeof value[field] !== 'string' || value[field].length === 0) throw new Error(`Delegation result field ${field} is required.`);
+  }
+  for (const field of ['baseRevision', 'worktreeRevision']) {
+    if (value[field] !== null && (typeof value[field] !== 'string' || value[field].length === 0)) {
+      throw new Error(`Delegation result field ${field} must be a non-empty string or null.`);
+    }
+  }
+  if (value.failureKind !== undefined && value.failureKind !== null && !['task', 'provider', 'verification', 'environment'].includes(value.failureKind)) {
+    throw new Error('Delegation result failureKind is invalid.');
   }
   if (!['completed', 'blocked', 'failed'].includes(value.status)) throw new Error('Delegation result status is invalid.');
   for (const field of ['changedFiles', 'commandsRun', 'commits', 'risks', 'blockers']) assertStringArray(value[field], field);
@@ -125,6 +143,9 @@ export async function recordDelegationReview(root, taskId, review) {
   if (!review || typeof review !== 'object' || Array.isArray(review)) throw new Error('Delegation review must be an object.');
   if (!['approved', 'rejected'].includes(review.verdict)) throw new Error('Delegation review verdict must be approved or rejected.');
   if (typeof review.summary !== 'string' || review.summary.trim() === '') throw new Error('Delegation review requires a summary.');
+  if (typeof result.worktreeRevision !== 'string' || result.worktreeRevision.length === 0) {
+    throw new Error('Write-capable delegation review requires a concrete worktree revision.');
+  }
   const value = {
     schemaVersion: 'hds-delegation-review/v1',
     taskId,
@@ -236,6 +257,35 @@ export function hasWriterReservation(root) {
   return fileExists(path.join(hafezPaths(root).delegations, 'writer-reservation.json'));
 }
 
+export async function retireDelegation(root, taskId, reason = 'superseded') {
+  const paths = delegationPaths(root, taskId);
+  const packet = await readJson(paths.packet, null);
+  if (!packet) throw new Error(`Delegation packet not found: ${taskId}`);
+
+  let worktreeRemoved = false;
+  let reservationReleased = false;
+  if (packet.access === 'write-worktree') {
+    const reservation = await readJson(paths.reservation, null);
+    if (reservation && reservation.taskId === packet.id && reservation.id === packet.reservation?.id) {
+      if (packet.worktree?.path) {
+        const { discardManagedWorktree } = await import('../lib/git-worktrees.mjs');
+        discardManagedWorktree(root, packet.worktree.path);
+        worktreeRemoved = true;
+      }
+      reservationReleased = await releaseWriterReservation(root, packet.id, reservation.id);
+    }
+  }
+
+  const retired = {
+    schemaVersion: 'hds-delegation-retirement/v1',
+    taskId,
+    reason,
+    retiredAt: new Date().toISOString(),
+  };
+  await writeJson(paths.retired, retired);
+  return { taskId, retired: true, worktreeRemoved, reservationReleased, retirementPath: paths.retired };
+}
+
 export async function abortDelegation(root, taskId) {
   const paths = delegationPaths(root, taskId);
   const packet = await readJson(paths.packet, null);
@@ -315,12 +365,13 @@ export async function listIntegrationQueue(root) {
   for (const taskId of taskIds) {
     const packet = await readJson(delegationPacketPath(root, taskId), null);
     const result = await readJson(delegationResultPath(root, taskId), null);
-    const readiness = await checkIntegrationReadiness(root, taskId);
+    const retired = await readJson(delegationPaths(root, taskId).retired, null);
+    const readiness = retired ? { ready: false, reasons: [`Delegation retired: ${retired.reason}`] } : await checkIntegrationReadiness(root, taskId);
     items.push({
       taskId,
       provider: result?.provider ?? packet?.provider ?? null,
       access: packet?.access ?? null,
-      status: result?.status ?? 'pending',
+      status: retired ? 'retired' : (result?.status ?? 'pending'),
       review: reviewStatus(await readJson(delegationPaths(root, taskId).review, null)),
       ...readiness,
     });

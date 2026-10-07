@@ -258,3 +258,52 @@ test('autopilot safely adopts an unmanaged project before selecting work', async
   assert.notEqual(result.reason, 'adoption-required');
   assert.ok(await loadProjectState(root));
 });
+
+
+test('autopilot treats technical failed gates as debug work instead of a stop boundary', async () => {
+  const root = await adoptedProject();
+  await declareGate(root, { id: 'test', command: [process.execPath, '-e', 'process.exit(1)'], required: true });
+  await updateState(root, { gates: { test: 'failed' }, workflowState: 'blocked' });
+
+  const result = await runAutonomous(root, { execute: true, autoAdopt: true, maxSteps: 8 });
+
+  assert.equal(result.status, 'ready');
+  assert.equal(result.reason, 'lead-action-required');
+  assert.equal(result.continuationRequired, true);
+  assert.equal(result.actions.at(-1).id, 'debug-required-gates');
+  assert.equal(result.decisionBoundary, null);
+});
+
+test('autopilot treats technical blockers as repair work but still stops for production authority', async () => {
+  const technicalRoot = await adoptedProject();
+  await updateState(technicalRoot, {
+    workflowState: 'blocked',
+    blockers: [{ id: 'B-01', message: 'The parser test fails on a null value.' }],
+  });
+
+  const technical = await runAutonomous(technicalRoot, { execute: true, autoAdopt: true });
+  assert.equal(technical.status, 'ready');
+  assert.equal(technical.reason, 'lead-action-required');
+  assert.equal(technical.actions.at(-1).id, 'resolve-technical-blockers');
+
+  const ownerRoot = await adoptedProject();
+  await updateState(ownerRoot, {
+    workflowState: 'blocked',
+    blockers: [{ id: 'B-02', message: 'Production credentials are required for deployment.' }],
+  });
+
+  const owner = await runAutonomous(ownerRoot, { execute: true, autoAdopt: true });
+  assert.equal(owner.status, 'blocked');
+  assert.equal(owner.reason, 'blockers-present');
+  assert.ok(owner.decisionBoundary);
+});
+
+test('autopilot step budget requests continuation instead of project-owner intervention', async () => {
+  const root = await adoptedProject();
+  const result = await runAutonomous(root, { execute: true, autoAdopt: true, maxSteps: 1 });
+
+  assert.equal(result.status, 'ready');
+  assert.equal(result.reason, 'continuation-budget-reached');
+  assert.equal(result.continuationRequired, true);
+  assert.equal(result.decisionBoundary, null);
+});

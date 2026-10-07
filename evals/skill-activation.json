@@ -157,7 +157,8 @@
         "hafez-workspace",
         "hafez-autopilot",
         "hafez-debug",
-        "hafez-review"
+        "hafez-review",
+        "hafez-decompose"
       ]
     },
     {
@@ -208,6 +209,18 @@
       "rejects": [
         "hafez-adopt",
         "hafez-plan-slice"
+      ]
+    },
+    {
+      "id": "direct-work-decomposition",
+      "kind": "direct",
+      "prompt": "Break this active slice into safe parallel scouts and bounded implementation units. Assign low-risk work to helper models, keep risky architecture with the lead, and define file scopes and verification for each unit.",
+      "activates": [
+        "hafez-decompose"
+      ],
+      "rejects": [
+        "hafez-adopt",
+        "hafez-handoff"
       ]
     }
   ]

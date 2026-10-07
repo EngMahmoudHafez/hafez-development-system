@@ -1,4 +1,6 @@
 import path from 'node:path';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { commandExists, run, runStatus } from '../lib/process.mjs';
 import { hafezPaths, loadProjectState } from './state.mjs';
 import { isoFileTimestamp, slugify, writeJson } from '../lib/files.mjs';
@@ -8,11 +10,15 @@ import { createManagedWorktree, discardManagedWorktree, gitRepositoryState } fro
 import {
   delegationPacketPath,
   hasWriterReservation,
+  ingestDelegationResult,
   releaseWriterReservation,
   reserveWriter,
   updateWriterReservation,
+  validateDelegationResult,
   validateDelegationScope,
 } from './delegation.mjs';
+
+const delegationResultSchemaPath = fileURLToPath(new URL('../../schemas/delegation-result.schema.json', import.meta.url));
 
 const providerDefinitions = {
   codex: { command: 'codex', kind: 'agent-cli', aliases: ['openai'] },
@@ -59,12 +65,28 @@ export function providerInvocation(provider, packet) {
   const executionRoot = packet.worktree?.path ?? packet.projectRoot;
   const readOnly = packet.access === 'read-only';
   const model = routedModel(provider, packet);
-  if (provider === 'codex') return {
-    command: 'codex',
-    args: ['exec', ...(model ? ['--model', model] : []), '--ephemeral', '--ignore-user-config', '--json', '--sandbox', readOnly ? 'read-only' : 'workspace-write', '--cd', executionRoot, '-'],
-    input: prompt,
-    cwd: executionRoot,
-  };
+  if (provider === 'codex') {
+    const resultPath = `${packet.packetPath}.provider-result.json`;
+    return {
+      command: 'codex',
+      args: [
+        'exec',
+        ...(model ? ['--model', model] : []),
+        '--ephemeral',
+        '--ignore-user-config',
+        '--json',
+        '--sandbox', readOnly ? 'read-only' : 'workspace-write',
+        '--cd', executionRoot,
+        '--output-schema', delegationResultSchemaPath,
+        '--output-last-message', resultPath,
+        '-',
+      ],
+      input: prompt,
+      cwd: executionRoot,
+      resultSource: 'file',
+      resultPath,
+    };
+  }
   if (provider === 'claude') {
     const tools = readOnly ? 'Read,Glob,Grep' : 'Read,Glob,Grep,Edit,Write,Bash';
     return {
@@ -72,12 +94,14 @@ export function providerInvocation(provider, packet) {
       args: [...(model ? ['--model', model] : []), '--restricted', '--strict-mcp-config', '--print', '--permission-prompts', 'none', '--tools', tools, '--no-session-persistence', '--output-format', 'json'],
       input: prompt,
       cwd: executionRoot,
+      resultSource: 'claude-json',
     };
   }
   if (provider === 'gemini') return {
     command: 'gemini',
     args: [...(model ? ['--model', model] : []), '--prompt', prompt, '--approval-mode', readOnly ? 'plan' : 'auto_edit', '--sandbox', '--output-format', 'json'],
     cwd: executionRoot,
+    resultSource: 'gemini-json',
   };
   if (provider === 'kimi') return { command: 'kimi', args: ['-p', prompt, '--output-format', 'stream-json'], cwd: executionRoot };
   if (provider === 'antigravity-cli') return { command: 'agy', args: ['-p', prompt, '--sandbox', '--output-format', 'json'], cwd: executionRoot };
@@ -165,6 +189,10 @@ export async function prepareDelegation(root, options) {
   const provider = canonicalProvider(options.provider);
   if (!provider) throw new Error(`Unknown provider: ${options.provider}`);
   if (!['read-only', 'write-worktree'].includes(options.access)) throw new Error(`Unsupported delegation access: ${options.access}`);
+  const workerTier = options.workerTier ?? 'worker';
+  if (!['scout', 'worker', 'specialist', 'lead'].includes(workerTier)) throw new Error(`Unsupported worker tier: ${workerTier}`);
+  const attempt = options.attempt ?? 1;
+  if (!Number.isSafeInteger(attempt) || attempt < 1) throw new Error('Delegation attempt must be a positive integer.');
   if (providerDefinitions[provider].kind === 'editor-host' && options.access === 'write-worktree') {
     throw new Error(`${provider} is an interactive host and cannot own a write-capable delegation.`);
   }
@@ -184,12 +212,14 @@ export async function prepareDelegation(root, options) {
     projectRoot: path.resolve(root),
     baseRevision: context.baseRevision,
     activeSlice: managed?.state.activeSlice ?? null,
+    parentTaskId: options.parentTaskId ?? null,
+    attempt,
     task: options.task,
     allowedPaths: context.allowedPaths,
     allowedCommands: context.allowedCommands,
     worktree: context.worktree,
     reservation: context.reservation ? { id: context.reservation.id, path: context.reservation.reservationPath } : null,
-    workerTier: options.workerTier ?? 'worker',
+    workerTier,
     model: options.model ?? null,
     reviewRequired: options.reviewRequired ?? options.access === 'write-worktree',
     timeoutSeconds: 900,
@@ -203,6 +233,35 @@ export async function prepareDelegation(root, options) {
     throw error;
   }
   return packet;
+}
+
+export function extractDelegationResult(provider, execution, invocation) {
+  let raw;
+  if (invocation.resultSource === 'file') {
+    raw = readFileSync(invocation.resultPath, 'utf8');
+  } else if (invocation.resultSource === 'claude-json') {
+    const envelope = JSON.parse(execution.stdout || '{}');
+    if (envelope.is_error || typeof envelope.result !== 'string') {
+      throw new Error('Claude delegation did not return a successful JSON result envelope.');
+    }
+    raw = envelope.result;
+  } else if (invocation.resultSource === 'gemini-json') {
+    const envelope = JSON.parse(execution.stdout || '{}');
+    if (envelope.error || typeof envelope.response !== 'string') {
+      throw new Error('Gemini delegation did not return a successful JSON response envelope.');
+    }
+    raw = envelope.response;
+  } else {
+    raw = execution.stdout ?? '';
+  }
+
+  let result;
+  try {
+    result = JSON.parse(raw);
+  } catch {
+    throw new Error(`${provider} delegation final response is not valid hds-delegation-result JSON.`);
+  }
+  return validateDelegationResult(result);
 }
 
 export function executeDelegation(packet) {
@@ -222,5 +281,51 @@ export function executeDelegation(packet) {
   if (execution.status !== 0) {
     throw new Error(`${packet.provider} delegation failed with exit code ${execution.status}. Task packet: ${packet.packetPath}`);
   }
-  return { status: execution.status, stdout: execution.stdout ?? '', stderr: execution.stderr ?? '' };
+  const structuredResult = extractDelegationResult(packet.provider, execution, invocation);
+  return {
+    status: execution.status,
+    stdout: execution.stdout ?? '',
+    stderr: execution.stderr ?? '',
+    structuredResult,
+  };
+}
+
+function syntheticProviderFailure(packet, error) {
+  return {
+    schemaVersion: 'hds-delegation-result/v1',
+    taskId: packet.id,
+    provider: packet.provider,
+    status: 'failed',
+    baseRevision: packet.baseRevision ?? null,
+    worktreeRevision: packet.worktree?.head ?? packet.baseRevision ?? null,
+    summary: 'The delegated provider did not produce a valid structured result.',
+    changedFiles: [],
+    commandsRun: [],
+    commits: [],
+    verification: [],
+    risks: [],
+    blockers: ['Provider execution failed before a valid structured result was produced.'],
+    nextAction: 'retry or escalate through Hafez',
+    failureKind: 'provider',
+  };
+}
+
+export async function executeDelegationAndIngest(packet) {
+  let execution;
+  let result;
+  try {
+    execution = executeDelegation(packet);
+    result = execution.structuredResult;
+  } catch (error) {
+    result = syntheticProviderFailure(packet, error);
+    execution = { status: 1, stdout: '', stderr: '', providerError: true };
+  }
+
+  const ingested = await ingestDelegationResult(packet.projectRoot, packet.id, result);
+  return {
+    status: execution.status,
+    providerError: Boolean(execution.providerError),
+    result,
+    readiness: ingested.readiness,
+  };
 }

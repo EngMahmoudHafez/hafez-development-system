@@ -4,6 +4,7 @@ import { fileExists, readJson } from '../lib/files.mjs';
 import { documentType, formatValidationError, validateHafezDocument } from './schema-validator.mjs';
 
 const metadataTypes = {
+  'autopilot.json': 'autopilot',
   'capabilities.json': 'capabilities',
   'project.json': 'project',
   'state.json': 'state',
@@ -42,9 +43,11 @@ export async function validateProjectMetadata(root) {
   const resolvedRoot = path.resolve(root);
   const requiredFiles = ['project.json', 'state.json', 'capabilities.json'].map((name) => path.join(resolvedRoot, '.hafez', name));
   const optionalWorkspace = path.join(resolvedRoot, '.hafez', 'workspace.json');
+  const optionalAutopilot = path.join(resolvedRoot, '.hafez', 'autopilot.json');
   const missing = requiredFiles.filter((filePath) => !fileExists(filePath));
   const files = requiredFiles.filter(fileExists);
   if (fileExists(optionalWorkspace)) files.push(optionalWorkspace);
+  if (fileExists(optionalAutopilot)) files.push(optionalAutopilot);
   files.push(...await delegationFiles(resolvedRoot));
   const validations = await Promise.all(files.map((filePath) => validateHafezFile(filePath)));
   const errors = [

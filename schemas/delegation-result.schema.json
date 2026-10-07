@@ -3,33 +3,130 @@
   "$id": "https://hafez.dev/schemas/delegation-result.schema.json",
   "title": "HDS delegation result",
   "type": "object",
-  "required": ["schemaVersion", "taskId", "provider", "status", "baseRevision", "worktreeRevision", "summary", "changedFiles", "commandsRun", "commits", "verification", "risks", "blockers", "nextAction"],
+  "required": [
+    "schemaVersion",
+    "taskId",
+    "provider",
+    "status",
+    "baseRevision",
+    "worktreeRevision",
+    "summary",
+    "changedFiles",
+    "commandsRun",
+    "commits",
+    "verification",
+    "risks",
+    "blockers",
+    "nextAction"
+  ],
   "properties": {
-    "schemaVersion": { "const": "hds-delegation-result/v1" },
-    "taskId": { "type": "string", "minLength": 1 },
-    "provider": { "type": "string", "minLength": 1 },
-    "status": { "enum": ["completed", "blocked", "failed"] },
-    "baseRevision": { "type": "string", "minLength": 1 },
-    "worktreeRevision": { "type": "string", "minLength": 1 },
-    "summary": { "type": "string", "minLength": 1 },
-    "changedFiles": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
-    "commandsRun": { "type": "array", "items": { "type": "string" } },
-    "commits": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+    "schemaVersion": {
+      "const": "hds-delegation-result/v1"
+    },
+    "taskId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "provider": {
+      "type": "string",
+      "minLength": 1
+    },
+    "status": {
+      "enum": [
+        "completed",
+        "blocked",
+        "failed"
+      ]
+    },
+    "baseRevision": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "worktreeRevision": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "changedFiles": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "commandsRun": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "commits": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
     "verification": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["command", "status"],
+        "required": [
+          "command",
+          "status"
+        ],
         "properties": {
-          "command": { "type": "string", "minLength": 1 },
-          "status": { "enum": ["passed", "failed", "skipped"] }
+          "command": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "enum": [
+              "passed",
+              "failed",
+              "skipped"
+            ]
+          }
         },
         "additionalProperties": false
       }
     },
-    "risks": { "type": "array", "items": { "type": "string" } },
-    "blockers": { "type": "array", "items": { "type": "string" } },
-    "nextAction": { "type": "string", "minLength": 1 }
+    "risks": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "blockers": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "nextAction": {
+      "type": "string",
+      "minLength": 1
+    },
+    "failureKind": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "task",
+        "provider",
+        "verification",
+        "environment",
+        null
+      ]
+    }
   },
   "additionalProperties": false
 }

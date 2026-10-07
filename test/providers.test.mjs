@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
-import { mkdtemp } from 'node:fs/promises';
+import { mkdtemp, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { prepareDelegation, providerInvocation, providerStatus } from '../src/core/providers.mjs';
+import { extractDelegationResult, prepareDelegation, providerInvocation, providerStatus } from '../src/core/providers.mjs';
 import { adoptProject } from '../src/core/state.mjs';
 import { inspectProject } from '../src/core/inspector.mjs';
 
@@ -77,4 +77,97 @@ test('provider model routing keeps the lead strong and helpers cheap where alias
 
   const explicit = providerInvocation('codex', { ...base, workerTier: 'worker', model: 'custom-model' });
   assert.deepEqual(explicit.args.slice(0, 3), ['exec', '--model', 'custom-model']);
+});
+
+
+function delegationResultFixture(provider = 'codex') {
+  return {
+    schemaVersion: 'hds-delegation-result/v1',
+    taskId: 'task-1',
+    provider,
+    status: 'completed',
+    baseRevision: 'abc123',
+    worktreeRevision: 'def456',
+    summary: 'Completed bounded task.',
+    changedFiles: [],
+    commandsRun: ['node --test'],
+    commits: [],
+    verification: [{ command: 'node --test', status: 'passed' }],
+    risks: [],
+    blockers: [],
+    nextAction: 'review',
+  };
+}
+
+test('provider structured output adapters extract one validated delegation result', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'hds-provider-output-'));
+  const basePacket = {
+    id: 'task-1',
+    role: 'implementer',
+    access: 'read-only',
+    projectRoot: root,
+    baseRevision: 'abc123',
+    task: 'Inspect the project.',
+    allowedPaths: [],
+    allowedCommands: ['node --test'],
+    workerTier: 'worker',
+    packetPath: path.join(root, 'task-1.json'),
+  };
+
+  const codexInvocation = providerInvocation('codex', basePacket);
+  const codexResult = delegationResultFixture('codex');
+  await writeFile(codexInvocation.resultPath, JSON.stringify(codexResult));
+  assert.deepEqual(
+    extractDelegationResult('codex', { stdout: '', stderr: '' }, codexInvocation),
+    codexResult,
+  );
+  assert.ok(codexInvocation.args.includes('--output-schema'));
+  assert.ok(codexInvocation.args.includes('--output-last-message'));
+
+  const claudeResult = delegationResultFixture('claude');
+  const claudeInvocation = providerInvocation('claude', basePacket);
+  assert.deepEqual(
+    extractDelegationResult('claude', {
+      stdout: JSON.stringify({ type: 'result', subtype: 'success', is_error: false, result: JSON.stringify(claudeResult) }),
+    }, claudeInvocation),
+    claudeResult,
+  );
+
+  const geminiResult = delegationResultFixture('gemini');
+  const geminiInvocation = providerInvocation('gemini', basePacket);
+  assert.deepEqual(
+    extractDelegationResult('gemini', {
+      stdout: JSON.stringify({ response: JSON.stringify(geminiResult), stats: {}, error: null }),
+    }, geminiInvocation),
+    geminiResult,
+  );
+});
+
+test('provider structured output adapters reject prose and error envelopes', () => {
+  const packet = {
+    id: 'task-1',
+    role: 'implementer',
+    access: 'read-only',
+    projectRoot: '/project',
+    baseRevision: 'abc123',
+    task: 'Inspect the project.',
+    allowedPaths: [],
+    allowedCommands: [],
+    workerTier: 'worker',
+    packetPath: '/tmp/task-1.json',
+  };
+
+  assert.throws(
+    () => extractDelegationResult('claude', {
+      stdout: JSON.stringify({ type: 'result', is_error: false, result: 'Looks good to me.' }),
+    }, providerInvocation('claude', packet)),
+    /not valid hds-delegation-result JSON/,
+  );
+
+  assert.throws(
+    () => extractDelegationResult('gemini', {
+      stdout: JSON.stringify({ response: null, error: { message: 'failed' } }),
+    }, providerInvocation('gemini', packet)),
+    /did not return a successful JSON response envelope/,
+  );
 });
