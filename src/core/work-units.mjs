@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { readdir } from 'node:fs/promises';
 import { fileExists, readJson, writeJson } from '../lib/files.mjs';
-import { loadProjectState } from './state.mjs';
+import { loadProjectState, saveState } from './state.mjs';
 
 const statuses = new Set(['planned', 'ready', 'active', 'blocked', 'completed']);
 
@@ -37,5 +37,30 @@ export async function updateWorkUnitStatus(root, workUnitId, status) {
     slicePath: context.slicePath,
     workUnitId,
     status,
+  };
+}
+
+
+export async function completeActiveSlice(root) {
+  const context = await loadActiveSlice(root);
+  if (!context.slice || !context.activeSlice) throw new Error('No active slice is available to complete.');
+  const units = Array.isArray(context.slice.workUnits) ? context.slice.workUnits : [];
+  const incomplete = units.filter((unit) => !unit || typeof unit !== 'object' || unit.status !== 'completed');
+  if (incomplete.length > 0) {
+    throw new Error(`Active slice ${context.activeSlice} still has incomplete work units.`);
+  }
+
+  context.slice.status = 'ready';
+  await writeJson(context.slicePath, context.slice);
+
+  context.managed.state.activeSlice = null;
+  context.managed.state.workflowState = 'ready';
+  context.managed.state.nextSafeAction = `Create a handoff for verified slice ${context.activeSlice}.`;
+  await saveState(root, context.managed.state);
+
+  return {
+    activeSlice: context.activeSlice,
+    slicePath: context.slicePath,
+    status: 'ready',
   };
 }
