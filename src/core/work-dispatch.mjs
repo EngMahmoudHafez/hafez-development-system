@@ -180,6 +180,53 @@ function taskForUnit(plan, unit) {
   ].filter(Boolean).join('\n');
 }
 
+function providerSerializedExecutor(executePacket) {
+  const lanes = new Map();
+  return async (packet) => {
+    const provider = packet.provider;
+    const previous = lanes.get(provider) ?? Promise.resolve();
+    const execution = previous.catch(() => {}).then(() => executePacket(packet));
+    let lane;
+    lane = execution.finally(() => {
+      if (lanes.get(provider) === lane) lanes.delete(provider);
+    });
+    lanes.set(provider, lane);
+    return execution;
+  };
+}
+
+async function executePreparedPacket(plan, entry, options) {
+  const executePacket = options.executePacket ?? executeDelegationAndIngest;
+  const cyclePacket = options.runCycle ?? runDelegationCycle;
+  const execution = await executePacket(entry.packet);
+  const cycle = options.cycle === false
+    ? null
+    : await cyclePacket(plan.root, entry.packet.id, {
+      maxSteps: options.maxSteps,
+      executePacket,
+      providerStatus: options.providerStatus,
+    });
+  return { unitId: entry.unitId, packetId: entry.packet.id, execution, cycle };
+}
+
+async function executeScoutGroups(plan, entries, options) {
+  const groups = new Map();
+  for (const entry of entries) {
+    const provider = entry.packet.provider;
+    if (!groups.has(provider)) groups.set(provider, []);
+    groups.get(provider).push(entry);
+  }
+
+  const groupResults = await Promise.all([...groups.values()].map(async (group) => {
+    const results = [];
+    for (const entry of group) {
+      results.push(await executePreparedPacket(plan, entry, options));
+    }
+    return results;
+  }));
+  return groupResults.flat();
+}
+
 export async function prepareDispatch(root, options = {}) {
   const plan = await buildDispatchPlan(root, options);
   if (plan.needsDecomposition || !plan.activeSlice) {
@@ -187,7 +234,6 @@ export async function prepareDispatch(root, options = {}) {
   }
 
   const packets = [];
-  const executions = [];
   for (const unit of plan.units) {
     if (!unit.dispatch?.dispatchable || unit.dispatch.action !== 'delegate') continue;
     const packet = await prepareDelegation(plan.root, {
@@ -202,15 +248,39 @@ export async function prepareDispatch(root, options = {}) {
       workUnitId: unit.id,
     });
     await updateWorkUnitStatus(plan.root, unit.id, 'active');
-    packets.push({ unitId: unit.id, packet });
-    if (options.execute === true) {
-      const execution = await executeDelegationAndIngest(packet);
-      const cycle = options.cycle === false
-        ? null
-        : await runDelegationCycle(plan.root, packet.id, { maxSteps: options.maxSteps });
-      executions.push({ unitId: unit.id, packetId: packet.id, execution, cycle });
-    }
+    packets.push({ unitId: unit.id, unit, packet });
   }
 
-  return { plan, packets, executions };
+  if (options.execute !== true) {
+    return {
+      plan,
+      packets: packets.map(({ unitId, packet }) => ({ unitId, packet })),
+      executions: [],
+    };
+  }
+
+  const serializedExecutePacket = providerSerializedExecutor(options.executePacket ?? executeDelegationAndIngest);
+  const executionOptions = { ...options, executePacket: serializedExecutePacket };
+
+  const parallelScouts = packets.filter(({ unit, packet }) => (
+    packet.access === 'read-only'
+      && unit.parallelSafe === true
+      && packet.workerTier !== 'lead'
+  ));
+  const serialized = packets.filter((entry) => !parallelScouts.includes(entry));
+
+  const executions = [];
+  executions.push(...await executeScoutGroups(plan, parallelScouts, executionOptions));
+  for (const entry of serialized) {
+    executions.push(await executePreparedPacket(plan, entry, executionOptions));
+  }
+
+  const executionOrder = new Map(packets.map((entry, index) => [entry.unitId, index]));
+  executions.sort((left, right) => executionOrder.get(left.unitId) - executionOrder.get(right.unitId));
+
+  return {
+    plan,
+    packets: packets.map(({ unitId, packet }) => ({ unitId, packet })),
+    executions,
+  };
 }
