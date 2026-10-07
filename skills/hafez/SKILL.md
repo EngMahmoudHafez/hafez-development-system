@@ -16,6 +16,7 @@ state, planning, verification, and handoff contracts directly.
 - "Keep going", "finish whatever is left", "fix errors and continue", or "run this project autonomously" routes to `hafez-autopilot`.
 - Reproducible failures route to `hafez-debug`; delegated writes route through `hafez-review` before integration.
 - "Build this feature" routes to resume or adopt, then one vertical slice and its stack adapter.
+- Multi-part active slices route through `hafez-decompose` before write delegation so the lead can assign safe bounded work units.
 - "Is this ready?" routes to verification and an evidence-based readiness answer.
 - "Give this to another model" routes to bounded delegation and a durable handoff.
 - "Coordinate these repositories" routes to an explicit `hafez-workspace` graph; names and paths are
@@ -34,11 +35,12 @@ must pause before agent-owned work.
 2. If state exists, use `hafez-resume` before proposing work.
 3. Choose one current focus: discovery, foundation, delivery, integration, hardening, release, or operation.
 4. Plan end-user capabilities as vertical slices with `hafez-plan-slice`.
-5. Delegate independent work with `hafez-delegate`; keep the strongest available model as lead integrator and use cheaper/helper models for bounded work.
-6. Require `hafez-review` approval for write-capable delegated revisions before deterministic integration.
-7. Use the matching stack adapter when detected. Stack guidance never overrides observed project conventions.
-8. Use `hafez-debug` for recoverable failures, then run `hafez-verify` before claiming completion and `hafez-handoff` whenever work pauses or changes owner.
-9. Use `hafez-workspace` when one capability crosses repository boundaries.
+5. Use `hafez-decompose` when a slice has several independently verifiable concerns; then delegate independent work with `hafez-delegate`.
+6. Keep the strongest available model as lead integrator and use cheaper/helper models for bounded work.
+7. Require `hafez-review` approval for write-capable delegated revisions before deterministic integration.
+8. Use the matching stack adapter when detected. Stack guidance never overrides observed project conventions.
+9. Use `hafez-debug` for recoverable failures, then run `hafez-verify` before claiming completion and `hafez-handoff` whenever work pauses or changes owner.
+10. Use `hafez-workspace` when one capability crosses repository boundaries.
 
 Treat code, Git, lockfiles, contracts, and command output as stronger evidence than documentation. Never convert `skipped` or `unavailable` into success.
 
