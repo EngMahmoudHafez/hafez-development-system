@@ -1,4 +1,5 @@
-import { providerStatus } from './providers.mjs';
+import { prepareDelegation, providerStatus } from './providers.mjs';
+import { readDelegationContext, retireDelegation } from './delegation.mjs';
 
 function usable(entry) {
   return entry?.installed === true && entry?.configured !== false;
@@ -149,4 +150,49 @@ export function decideDelegationContinuation(packet, result = null, review = nul
   }
 
   return { action: 'continue', reason: 'no-stop-condition', ownerDecisionRequired: false };
+}
+
+
+function continuationTask(packet, result, review) {
+  const lines = [
+    packet.task,
+    '',
+    'Continuation context from the previous attempt:',
+    `Previous task id: ${packet.id}`,
+    `Previous status: ${result?.status ?? 'missing'}`,
+  ];
+  if (result?.summary) lines.push(`Previous summary: ${result.summary}`);
+  if (Array.isArray(result?.blockers) && result.blockers.length > 0) {
+    lines.push(`Previous blockers: ${result.blockers.join(' | ')}`);
+  }
+  if (review?.summary) lines.push(`Lead review: ${review.summary}`);
+  lines.push('Address the previous failure/review feedback; do not repeat the same unsuccessful approach without new evidence.');
+  return lines.join('\n');
+}
+
+export async function continueDelegation(root, taskId, options = {}) {
+  const context = await readDelegationContext(root, taskId);
+  if (!context.packet) throw new Error(`Delegation packet not found: ${taskId}`);
+
+  const decision = decideDelegationContinuation(context.packet, context.result, context.review, options);
+  if (!['retry', 'escalate'].includes(decision.action)) {
+    return { decision, packet: null, retired: null };
+  }
+
+  const retired = await retireDelegation(root, taskId, decision.reason);
+  const packet = await prepareDelegation(root, {
+    provider: options.provider ?? context.packet.provider,
+    role: context.packet.role,
+    task: continuationTask(context.packet, context.result, context.review),
+    access: context.packet.access,
+    allowedPaths: context.packet.allowedPaths,
+    allowedCommands: context.packet.allowedCommands,
+    workerTier: decision.nextTier,
+    model: options.model ?? (decision.action === 'retry' ? context.packet.model : null),
+    parentTaskId: context.packet.id,
+    attempt: decision.nextAttempt,
+    reviewRequired: context.packet.reviewRequired,
+  });
+
+  return { decision, retired, packet };
 }
