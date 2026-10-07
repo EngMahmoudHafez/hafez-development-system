@@ -15,6 +15,7 @@ function delegationPaths(root, taskId) {
     directory,
     packet: path.join(directory, `${taskId}.json`),
     result: path.join(directory, `${taskId}.result.json`),
+    review: path.join(directory, `${taskId}.review.json`),
     reservation: path.join(directory, 'writer-reservation.json'),
   };
 }
@@ -115,6 +116,28 @@ export function validateDelegationResult(value) {
   return value;
 }
 
+export async function recordDelegationReview(root, taskId, review) {
+  const paths = delegationPaths(root, taskId);
+  const packet = await readJson(paths.packet, null);
+  const result = await readJson(paths.result, null);
+  if (!packet) throw new Error(`Delegation packet not found: ${taskId}`);
+  if (!result) throw new Error('Cannot review a delegation before its structured result is available.');
+  if (!review || typeof review !== 'object' || Array.isArray(review)) throw new Error('Delegation review must be an object.');
+  if (!['approved', 'rejected'].includes(review.verdict)) throw new Error('Delegation review verdict must be approved or rejected.');
+  if (typeof review.summary !== 'string' || review.summary.trim() === '') throw new Error('Delegation review requires a summary.');
+  const value = {
+    schemaVersion: 'hds-delegation-review/v1',
+    taskId,
+    verdict: review.verdict,
+    reviewer: review.reviewer || 'lead-agent',
+    summary: review.summary.trim(),
+    reviewedRevision: result.worktreeRevision,
+    reviewedAt: new Date().toISOString(),
+  };
+  await writeJson(paths.review, value);
+  return { reviewPath: paths.review, review: value };
+}
+
 export async function ingestDelegationResult(root, taskId, rawResult) {
   const packet = await readDelegationPacket(root, taskId);
   if (!packet) throw new Error(`Delegation packet not found: ${taskId}`);
@@ -142,12 +165,18 @@ export async function checkIntegrationReadiness(root, taskId) {
   const paths = delegationPaths(root, taskId);
   const packet = await readJson(paths.packet, null);
   const result = await readJson(paths.result, null);
+  const review = await readJson(paths.review, null);
   const reasons = [];
   if (!packet) return { ready: false, reasons: ['Delegation packet is missing.'] };
   if (packet.access !== 'write-worktree') reasons.push('Read-only delegations do not produce integratable changes.');
   if (!result) reasons.push('Structured delegation result is missing.');
   if (result?.status !== 'completed') reasons.push('Delegation did not complete successfully.');
   if (!packet.worktree?.path || !packet.reservation?.id) reasons.push('Managed worktree metadata is missing.');
+  if (packet.access === 'write-worktree' && packet.reviewRequired !== false) {
+    if (!review) reasons.push('Lead review approval is missing.');
+    else if (review.verdict !== 'approved') reasons.push('Lead review did not approve the delegation.');
+    else if (result && review.reviewedRevision !== result.worktreeRevision) reasons.push('Lead review is stale for the current delegated revision.');
+  }
 
   const reservation = await readJson(paths.reservation, null);
   if (!reservation || reservation.taskId !== packet.id || reservation.id !== packet.reservation?.id) {
@@ -214,6 +243,7 @@ export async function abortDelegation(root, taskId) {
   if (packet.access !== 'write-worktree') {
     await unlink(paths.packet);
     if (fileExists(paths.result)) await unlink(paths.result);
+    if (fileExists(paths.review)) await unlink(paths.review);
     return { taskId, aborted: true, worktreeRemoved: false, reservationReleased: false };
   }
 
@@ -228,12 +258,47 @@ export async function abortDelegation(root, taskId) {
   }
   await releaseWriterReservation(root, packet.id, reservation.id);
   if (fileExists(paths.result)) await unlink(paths.result);
+  if (fileExists(paths.review)) await unlink(paths.review);
   await unlink(paths.packet);
   return {
     taskId,
     aborted: true,
     worktreeRemoved: Boolean(packet.worktree?.path),
     reservationReleased: true,
+  };
+}
+
+function reviewStatus(review) {
+  return review?.verdict ?? 'pending';
+}
+
+export async function integrateDelegation(root, taskId) {
+  const paths = delegationPaths(root, taskId);
+  const readiness = await checkIntegrationReadiness(root, taskId);
+  if (!readiness.ready) throw new Error(`Delegation is not ready to integrate: ${readiness.reasons.join(' ')}`);
+  const packet = await readJson(paths.packet, null);
+  const result = await readJson(paths.result, null);
+  const git = inspectGit(root);
+  if (git.dirty) throw new Error('Integration repository must be clean before integrating delegated commits.');
+  if (git.revision !== packet.baseRevision) throw new Error('Integration repository advanced beyond the delegated base revision.');
+
+  const { run } = await import('../lib/process.mjs');
+  const commits = [...result.commits].reverse();
+  const execution = run('git', ['cherry-pick', ...commits], { cwd: root, timeout: 120_000 });
+  if (execution.status !== 0) {
+    run('git', ['cherry-pick', '--abort'], { cwd: root, timeout: 30_000 });
+    const detail = execution.stderr?.trim() || execution.stdout?.trim() || `exit code ${execution.status}`;
+    throw new Error(`Delegation integration failed: ${detail}`);
+  }
+
+  const { discardManagedWorktree } = await import('../lib/git-worktrees.mjs');
+  discardManagedWorktree(root, packet.worktree.path);
+  await releaseWriterReservation(root, packet.id, packet.reservation.id);
+  return {
+    taskId,
+    integrated: true,
+    commits,
+    revision: inspectGit(root).revision,
   };
 }
 
@@ -256,6 +321,7 @@ export async function listIntegrationQueue(root) {
       provider: result?.provider ?? packet?.provider ?? null,
       access: packet?.access ?? null,
       status: result?.status ?? 'pending',
+      review: reviewStatus(await readJson(delegationPaths(root, taskId).review, null)),
       ...readiness,
     });
   }
