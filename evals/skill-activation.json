@@ -154,7 +154,10 @@
         "hafez-delegate",
         "hafez-laravel",
         "hafez-nuxt-vue",
-        "hafez-workspace"
+        "hafez-workspace",
+        "hafez-autopilot",
+        "hafez-debug",
+        "hafez-review"
       ]
     },
     {
