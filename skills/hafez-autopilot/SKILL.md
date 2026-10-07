@@ -9,6 +9,8 @@ Act as the lead integrator. The user should not have to drive the lifecycle manu
 
 Start with `hafez autopilot <path> --json` when the runtime is available. If the project is unmanaged, autopilot may create only Hafez operating metadata; it must not silently impose an architecture profile.
 
+Before dispatching helpers, run `hafez delegation-plan <path> --json` when available. Use its zero-config topology unless the project has an explicit provider policy.
+
 Then loop until completion or a genuine decision boundary:
 
 1. Read the returned next action, active slice, blockers, Git state, and required gates.
