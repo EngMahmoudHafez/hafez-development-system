@@ -1,4 +1,4 @@
-import { executeDelegationAndIngest, prepareDelegation, providerStatus } from './providers.mjs';
+import { autoReviewDelegation, executeDelegationAndIngest, prepareDelegation, providerStatus, selectLeadProvider } from './providers.mjs';
 import { integrateDelegation, readDelegationContext, retireDelegation } from './delegation.mjs';
 import { verifyProject } from './verifier.mjs';
 import { ownerDecisionItems } from './decision-policy.mjs';
@@ -22,6 +22,7 @@ export function planDelegationTopology(status = providerStatus()) {
     schemaVersion: 'hds-delegation-topology/v1',
     lead: {
       owner: 'host-agent',
+      fallbackProvider: selectLeadProvider(status),
       responsibilities: ['decompose', 'architecture', 'security-review', 'approve', 'integrate', 'final-acceptance'],
     },
     scouts: scouts.map((provider) => ({
@@ -222,6 +223,7 @@ export async function runDelegationCycle(root, taskId, options = {}) {
   const integratePacket = options.integratePacket ?? integrateDelegation;
   const verifyIntegration = options.verifyIntegration ?? verifyProject;
   const continueTask = options.continueTask ?? continueDelegation;
+  const reviewPacket = options.reviewPacket ?? autoReviewDelegation;
   const trace = [];
   let currentTaskId = taskId;
 
@@ -314,6 +316,20 @@ export async function runDelegationCycle(root, taskId, options = {}) {
     }
 
     if (decision.action === 'review') {
+      if (options.autoReview !== false) {
+        const automaticReview = await reviewPacket(root, currentTaskId, {
+          providerStatus: options.providerStatus,
+          leadProvider: options.leadProvider,
+          leadModel: options.leadModel,
+        });
+        step.automaticReview = {
+          reviewed: automaticReview.reviewed,
+          provider: automaticReview.provider,
+          verdict: automaticReview.verdict ?? null,
+          reason: automaticReview.reason ?? null,
+        };
+        if (automaticReview.reviewed) continue;
+      }
       return {
         status: 'ready',
         reason: 'lead-review-required',
