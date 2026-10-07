@@ -57,3 +57,27 @@ destructive work, or an explicit architecture choice whose trade-off belongs to 
 
 If the host session ends for any non-decision reason, leave durable state/handoff so the next session
 resumes the same loop rather than treating interruption as approval to stop.
+
+
+## Non-stop continuation contract
+
+Do not surface an intermediate Hafez continuation state as a final user response.
+
+The following outcomes mean **continue working immediately**:
+- `lead-action-required`
+- `continuation-budget-reached`
+- `delegation-cycle-budget-reached`
+- `worker-result-pending`
+- `retry`
+- `escalate`
+- `lead-review-required`
+- `lead-takeover-required`
+- `post-integration-verification-failed`
+- failed/unavailable/skipped required gates that are technically repairable
+- technical blockers or non-material open questions
+
+For those outcomes, inspect the returned evidence, take the next action, and call Hafez again. Do not ask the project owner for routine implementation guidance.
+
+Only surface a blocking question when Hafez classifies it as an owner decision because it materially changes product/business behavior, architecture/public contracts, requires external authority/credentials, or is destructive/difficult to recover.
+
+A verified milestone may be reported to the user, but if the active project goal clearly has more in-scope work recorded, resume the loop instead of treating the milestone as the end of the project.
