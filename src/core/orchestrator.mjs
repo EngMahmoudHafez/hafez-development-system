@@ -1,5 +1,5 @@
-import { prepareDelegation, providerStatus } from './providers.mjs';
-import { readDelegationContext, retireDelegation } from './delegation.mjs';
+import { executeDelegationAndIngest, prepareDelegation, providerStatus } from './providers.mjs';
+import { integrateDelegation, readDelegationContext, retireDelegation } from './delegation.mjs';
 
 function usable(entry) {
   return entry?.installed === true && entry?.configured !== false;
@@ -218,4 +218,153 @@ export async function continueDelegation(root, taskId, options = {}) {
   });
 
   return { decision, retired, packet };
+}
+
+
+function delegationCycleStepLimit(value) {
+  if (value === undefined) return 8;
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > 50) {
+    throw new Error('Delegation cycle max steps must be an integer between 1 and 50.');
+  }
+  return parsed;
+}
+
+export async function runDelegationCycle(root, taskId, options = {}) {
+  const maxSteps = delegationCycleStepLimit(options.maxSteps);
+  const trace = [];
+  let currentTaskId = taskId;
+
+  while (trace.length < maxSteps) {
+    const context = await readDelegationContext(root, currentTaskId);
+    if (!context.packet) throw new Error(`Delegation packet not found: ${currentTaskId}`);
+
+    const decision = decideDelegationContinuation(
+      context.packet,
+      context.result,
+      context.review,
+      {
+        maxAttemptsPerTier: options.maxAttemptsPerTier,
+        providerStatus: options.providerStatus,
+      },
+    );
+    const step = {
+      step: trace.length + 1,
+      taskId: currentTaskId,
+      provider: context.packet.provider,
+      workerTier: context.packet.workerTier,
+      attempt: context.packet.attempt,
+      action: decision.action,
+      reason: decision.reason,
+    };
+    trace.push(step);
+
+    if (decision.action === 'continue' && decision.reason === 'worker-result-pending') {
+      const execution = await executeDelegationAndIngest(context.packet);
+      step.execution = {
+        status: execution.status,
+        providerError: execution.providerError,
+        resultStatus: execution.result.status,
+        failureKind: execution.result.failureKind ?? null,
+      };
+      continue;
+    }
+
+    if (['retry', 'escalate'].includes(decision.action)) {
+      const continued = await continueDelegation(root, currentTaskId, {
+        maxAttemptsPerTier: options.maxAttemptsPerTier,
+        providerStatus: options.providerStatus,
+        provider: options.provider,
+        model: options.model,
+      });
+      step.nextTaskId = continued.packet?.id ?? null;
+      if (!continued.packet) {
+        return {
+          status: 'ready',
+          reason: decision.reason,
+          continuationRequired: true,
+          currentTaskId,
+          decision,
+          trace,
+        };
+      }
+      currentTaskId = continued.packet.id;
+      continue;
+    }
+
+    if (decision.action === 'integrate') {
+      const integration = await integrateDelegation(root, currentTaskId);
+      return {
+        status: 'completed',
+        reason: 'delegation-integrated',
+        continuationRequired: true,
+        currentTaskId,
+        integration,
+        decision,
+        trace,
+      };
+    }
+
+    if (decision.action === 'review') {
+      return {
+        status: 'ready',
+        reason: 'lead-review-required',
+        continuationRequired: true,
+        currentTaskId,
+        decision,
+        trace,
+      };
+    }
+
+    if (decision.action === 'lead-takeover') {
+      return {
+        status: 'ready',
+        reason: 'lead-takeover-required',
+        continuationRequired: true,
+        currentTaskId,
+        decision,
+        trace,
+      };
+    }
+
+    if (decision.action === 'owner-decision') {
+      return {
+        status: 'paused',
+        reason: 'owner-decision-required',
+        continuationRequired: false,
+        currentTaskId,
+        decision,
+        trace,
+      };
+    }
+
+    if (decision.reason === 'scout-evidence-ready') {
+      return {
+        status: 'completed',
+        reason: 'scout-evidence-ready',
+        continuationRequired: true,
+        currentTaskId,
+        decision,
+        trace,
+      };
+    }
+
+    return {
+      status: 'ready',
+      reason: decision.reason,
+      continuationRequired: true,
+      currentTaskId,
+      decision,
+      trace,
+    };
+  }
+
+  return {
+    status: 'ready',
+    reason: 'delegation-cycle-budget-reached',
+    continuationRequired: true,
+    currentTaskId,
+    nextSafeAction: `Continue delegation cycle from task ${currentTaskId}.`,
+    trace,
+  };
 }
