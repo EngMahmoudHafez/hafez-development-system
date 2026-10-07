@@ -307,3 +307,50 @@ test('autopilot step budget requests continuation instead of project-owner inter
   assert.equal(result.continuationRequired, true);
   assert.equal(result.decisionBoundary, null);
 });
+
+
+test('autopilot resolves technical open questions without owner interruption', async () => {
+  const root = await adoptedProject();
+  await updateState(root, {
+    openQuestions: ['Which existing service already owns this parser behavior?'],
+    workflowState: 'in-progress',
+  });
+
+  const result = await runAutonomous(root, { execute: true, autoAdopt: true, maxSteps: 8 });
+
+  assert.equal(result.status, 'ready');
+  assert.equal(result.reason, 'lead-action-required');
+  assert.equal(result.continuationRequired, true);
+  assert.equal(result.actions.at(-1).id, 'resolve-technical-questions');
+  assert.equal(result.decisionBoundary, null);
+});
+
+test('autopilot pauses for explicit project-owner decisions', async () => {
+  const root = await adoptedProject();
+  await updateState(root, {
+    openQuestions: [{
+      question: 'Should the public API introduce a breaking v2 contract or preserve backward compatibility?',
+      requiresOwner: true,
+      category: 'product',
+    }],
+  });
+
+  const result = await runAutonomous(root, { execute: true, autoAdopt: true, maxSteps: 8 });
+
+  assert.equal(result.status, 'paused');
+  assert.equal(result.reason, 'decision-required');
+  assert.equal(result.questions.length, 1);
+  assert.ok(result.decisionBoundary);
+});
+
+test('autopilot infers material owner decisions from risky question text', async () => {
+  const root = await adoptedProject();
+  await updateState(root, {
+    openQuestions: ['Choose the authentication strategy for the public API and whether this is a breaking change.'],
+  });
+
+  const result = await runAutonomous(root, { execute: true, autoAdopt: true, maxSteps: 8 });
+
+  assert.equal(result.status, 'paused');
+  assert.equal(result.reason, 'decision-required');
+});
