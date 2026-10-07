@@ -1,0 +1,4 @@
+interface:
+  display_name: "Hafez — Security"
+  short_description: "Evidence-based security review and remediation"
+  default_prompt: "Use $hafez-security to inspect the relevant attack surface, fix clear reversible vulnerabilities, add regression coverage, and escalate only genuine authority or product decisions."
