@@ -7,6 +7,8 @@ import { adoptProject } from '../src/core/state.mjs';
 import { inspectProject } from '../src/core/inspector.mjs';
 import { planSlice } from '../src/core/planner.mjs';
 import { buildDispatchPlan, prepareDispatch } from '../src/core/work-dispatch.mjs';
+import { runDelegationCycle } from '../src/core/orchestrator.mjs';
+import { ingestDelegationResult } from '../src/core/delegation.mjs';
 
 const providers = {
   gemini: { installed: true, configured: true, kind: 'agent-cli' },
@@ -163,6 +165,87 @@ test('prepare dispatch creates bounded scout packets directly from structured wo
   assert.deepEqual(dispatched.packets.map((entry) => entry.unitId), ['WU-01', 'WU-02']);
   assert.deepEqual(dispatched.packets.map((entry) => entry.packet.provider), ['gemini', 'codex']);
   assert.ok(dispatched.packets.every((entry) => entry.packet.access === 'read-only'));
+  assert.deepEqual(dispatched.packets.map((entry) => entry.packet.workUnitId), ['WU-01', 'WU-02']);
   assert.match(dispatched.packets[0].packet.task, /Active slice: S-01/);
   assert.match(dispatched.packets[0].packet.task, /List all auth entry points/);
+
+  const activeSlice = JSON.parse(await readFile(fixture.slicePath, 'utf8'));
+  assert.deepEqual(activeSlice.workUnits.map((entry) => entry.status), ['active', 'active']);
+});
+
+
+test('successful scout completion advances its work unit and unlocks dependent work', async () => {
+  const fixture = await sliceFixture([
+    unit({
+      id: 'WU-01',
+      objective: 'Inspect authentication behavior.',
+      acceptanceCriteria: ['Document the current auth behavior.'],
+    }),
+    unit({
+      id: 'WU-02',
+      objective: 'Implement the missing auth regression.',
+      role: 'implementer',
+      dependencies: ['WU-01'],
+      workerTier: 'worker',
+      access: 'write-worktree',
+      parallelSafe: false,
+      allowedPaths: ['tests'],
+      verification: ['composer test'],
+      acceptanceCriteria: ['Regression coverage is added.'],
+    }),
+  ]);
+
+  const dispatched = await prepareDispatch(fixture.root, {
+    providerStatus: providers,
+    execute: false,
+  });
+  assert.equal(dispatched.packets.length, 1);
+  const packet = dispatched.packets[0].packet;
+  assert.equal(packet.workUnitId, 'WU-01');
+
+  const executePacket = async (current) => {
+    const result = {
+      schemaVersion: 'hds-delegation-result/v1',
+      taskId: current.id,
+      provider: current.provider,
+      status: 'completed',
+      baseRevision: current.baseRevision,
+      worktreeRevision: null,
+      summary: 'Auth behavior inspected.',
+      changedFiles: [],
+      commandsRun: [],
+      commits: [],
+      verification: [],
+      risks: [],
+      blockers: [],
+      nextAction: 'continue with dependent work',
+    };
+    await ingestDelegationResult(fixture.root, current.id, result);
+    return { status: 0, providerError: false, result, readiness: { ready: false, reasons: [] } };
+  };
+
+  const cycle = await runDelegationCycle(fixture.root, packet.id, {
+    executePacket,
+    maxSteps: 4,
+  });
+  assert.equal(cycle.reason, 'scout-evidence-ready');
+
+  const sliceAfter = JSON.parse(await readFile(fixture.slicePath, 'utf8'));
+  assert.equal(sliceAfter.workUnits[0].status, 'completed');
+  assert.equal(sliceAfter.workUnits[1].status, 'planned');
+
+  const nextPlan = await buildDispatchPlan(fixture.root, { providerStatus: providers });
+  const dependent = nextPlan.units.find((entry) => entry.id === 'WU-02');
+  assert.equal(dependent.dispatch.action, 'delegate');
+  assert.equal(dependent.dispatch.provider, 'codex');
+});
+
+test('active work units are never dispatched a second time', async () => {
+  const fixture = await sliceFixture([
+    unit({ status: 'active' }),
+  ]);
+
+  const plan = await buildDispatchPlan(fixture.root, { providerStatus: providers });
+  assert.equal(plan.units[0].dispatch.action, 'wait');
+  assert.equal(plan.units[0].dispatch.reason, 'unit-already-active');
 });
