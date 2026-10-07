@@ -281,6 +281,7 @@ async function markAutopilot(root, update = {}) {
     waitingForOwner: current?.waitingForOwner ?? false,
     lastReason: current?.lastReason ?? null,
     nextSafeAction: current?.nextSafeAction ?? null,
+    ownerDecision: current?.ownerDecision ?? null,
     ...update,
   };
   await writeJson(filePath, value);
@@ -305,6 +306,7 @@ export async function runAutonomous(inputPath = '.', options = {}) {
       waitingForOwner: false,
       lastReason: 'autopilot-running',
       nextSafeAction: initialResume.nextSafeAction ?? null,
+      ownerDecision: null,
     });
   }
   const actions = [];
@@ -368,11 +370,21 @@ export async function runAutonomous(inputPath = '.', options = {}) {
       'blockers-present',
     ]);
     const waitingForOwner = ownerReasons.has(outcome.reason);
+    const ownerItems = [
+      ...(Array.isArray(outcome.questions) ? outcome.questions : []),
+      ...(Array.isArray(outcome.blockers) ? outcome.blockers : []),
+    ];
     await markAutopilot(root, {
       active: outcome.reason !== 'handoff-created',
       waitingForOwner,
       lastReason: outcome.reason,
       nextSafeAction: outcome.nextSafeAction ?? machine.resume?.nextSafeAction ?? null,
+      ownerDecision: waitingForOwner ? {
+        reason: outcome.reason,
+        boundary: outcome.decisionBoundary ?? null,
+        items: ownerItems,
+        proposedAction: outcome.proposedAction ?? null,
+      } : null,
     });
   }
 
