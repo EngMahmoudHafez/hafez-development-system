@@ -427,3 +427,67 @@ test('delegation owner-decision policy supports structured blockers consistently
   assert.equal(decision.action, 'owner-decision');
   assert.equal(decision.ownerDecisionRequired, true);
 });
+
+
+test('delegation cycle can obtain lead review automatically and continue to integration', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'hds-orchestrator-auto-review-'));
+  git(root, 'init', '-q');
+  git(root, 'config', 'user.name', 'Hafez Tests');
+  git(root, 'config', 'user.email', 'hafez-tests@example.invalid');
+  await writeFile(path.join(root, 'README.md'), '# Fixture\n');
+  await adoptProject(await inspectProject(root));
+  git(root, 'add', '.');
+  git(root, 'commit', '-qm', 'fixture');
+
+  const packet = await prepareDelegation(root, {
+    provider: 'codex',
+    role: 'implementer',
+    task: 'Update scoped docs.',
+    access: 'write-worktree',
+    allowedPaths: ['docs'],
+    allowedCommands: ['node --test'],
+    workerTier: 'worker',
+  });
+  await writeFile(path.join(packet.worktree.path, 'docs', 'auto-review.md'), '# Auto Review\n');
+  git(packet.worktree.path, 'add', 'docs/auto-review.md');
+  git(packet.worktree.path, 'commit', '-qm', 'docs: auto review fixture');
+  const head = git(packet.worktree.path, 'rev-parse', 'HEAD');
+
+  await ingestDelegationResult(root, packet.id, {
+    schemaVersion: 'hds-delegation-result/v1',
+    taskId: packet.id,
+    provider: packet.provider,
+    status: 'completed',
+    baseRevision: packet.baseRevision,
+    worktreeRevision: head,
+    summary: 'Updated scoped docs.',
+    changedFiles: ['docs/auto-review.md'],
+    commandsRun: ['node --test'],
+    commits: [head],
+    verification: [{ command: 'node --test', status: 'passed' }],
+    risks: [],
+    blockers: [],
+    nextAction: 'review',
+  });
+
+  const { recordDelegationReview } = await import('../src/core/delegation.mjs');
+  let reviews = 0;
+  const reviewPacket = async (reviewRoot, taskId) => {
+    reviews += 1;
+    await recordDelegationReview(reviewRoot, taskId, {
+      verdict: 'approved',
+      reviewer: 'standalone-lead:test',
+      summary: 'Exact diff is scoped and verified.',
+    });
+    return { reviewed: true, provider: 'claude', verdict: 'approved' };
+  };
+
+  const cycle = await runDelegationCycle(root, packet.id, {
+    reviewPacket,
+    verifyIntegration: async () => ({ allPassed: true, results: [] }),
+  });
+
+  assert.equal(reviews, 1);
+  assert.equal(cycle.reason, 'delegation-integrated-and-verified');
+  assert.ok(cycle.trace.some((step) => step.automaticReview?.verdict === 'approved'));
+});

@@ -6,6 +6,7 @@ import { documentType, formatValidationError, validateHafezDocument } from './sc
 const metadataTypes = {
   'autopilot.json': 'autopilot',
   'capabilities.json': 'capabilities',
+  'delegation.json': 'delegation-config',
   'project.json': 'project',
   'state.json': 'state',
   'workspace.json': 'workspace',
@@ -41,7 +42,7 @@ async function delegationFiles(root) {
 
 export async function validateProjectMetadata(root) {
   const resolvedRoot = path.resolve(root);
-  const requiredFiles = ['project.json', 'state.json', 'capabilities.json'].map((name) => path.join(resolvedRoot, '.hafez', name));
+  const requiredFiles = ['project.json', 'state.json', 'capabilities.json', 'delegation.json'].map((name) => path.join(resolvedRoot, '.hafez', name));
   const optionalWorkspace = path.join(resolvedRoot, '.hafez', 'workspace.json');
   const optionalAutopilot = path.join(resolvedRoot, '.hafez', 'autopilot.json');
   const missing = requiredFiles.filter((filePath) => !fileExists(filePath));

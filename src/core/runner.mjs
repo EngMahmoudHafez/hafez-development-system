@@ -9,6 +9,7 @@ import { readJson, writeJson } from '../lib/files.mjs';
 import { isDestructiveDecision, ownerDecisionItems, requiresExternalAuthority } from './decision-policy.mjs';
 import { buildDispatchPlan, prepareDispatch } from './work-dispatch.mjs';
 import { completeActiveSlice } from './work-units.mjs';
+import { autoDecomposeActiveSlice } from './providers.mjs';
 
 const DEFAULT_MAX_STEPS = 8;
 const MAX_ALLOWED_STEPS = 100;
@@ -389,7 +390,23 @@ export async function runAutonomous(inputPath = '.', options = {}) {
         machine = { root, phase: 'resume', resume: null, managed: null, continuous: autoAdopt };
         continue;
       }
-      if (execute && transition.action.id === 'dispatch-ready-work') {
+      if (execute && transition.action.id === 'decompose-active-slice') {
+        transition.action.autoExecuted = true;
+        transition.action.result = await autoDecomposeActiveSlice(root);
+        if (transition.action.result.decomposed || transition.action.result.reason === 'owner-decision-required') {
+          machine = { root, phase: 'resume', resume: null, managed: null, continuous: autoAdopt };
+          continue;
+        }
+        outcome = autoAdopt
+          ? stop('ready', 'lead-action-required', {
+            continuationRequired: true,
+            decisionBoundary: null,
+            nextSafeAction: 'No standalone lead provider could decompose the active slice; let the host lead perform hafez-decompose and rerun autopilot.',
+          })
+          : stop('paused', 'agent-action-required', {
+            decisionBoundary: 'A lead agent must decompose the active slice.',
+          });
+      } else if (execute && transition.action.id === 'dispatch-ready-work') {
         transition.action.autoExecuted = true;
         transition.action.result = await prepareDispatch(root, { execute: true, maxSteps });
         outcome = stop('ready', 'delegations-dispatched', {

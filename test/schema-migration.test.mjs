@@ -7,6 +7,7 @@ import { inspectProject } from '../src/core/inspector.mjs';
 import { validateProjectMetadata } from '../src/core/metadata-validator.mjs';
 import { applyMigration, migrationPreview } from '../src/core/migrations.mjs';
 import { adoptProject } from '../src/core/state.mjs';
+import { loadSchema, validateJson } from '../src/core/schema-validator.mjs';
 
 test('adopted project metadata satisfies its schemas and reports useful field paths', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'hds-schema-'));
@@ -55,4 +56,40 @@ test('migration validates current documents and refuses to invent unsupported hi
   const applied = await applyMigration(filePath);
   assert.equal(applied.applied, false);
   assert.equal(JSON.parse(await readFile(filePath, 'utf8')).schemaVersion, 'hds-project/v1');
+});
+
+
+test('delegation policy is schema-validated as required project metadata', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'hds-delegation-schema-'));
+  await adoptProject(await inspectProject(root));
+  const delegationPath = path.join(root, '.hafez', 'delegation.json');
+  const delegation = JSON.parse(await readFile(delegationPath, 'utf8'));
+  delegation.leadProvider = 42;
+  await writeFile(delegationPath, JSON.stringify(delegation, null, 2));
+
+  const validation = await validateProjectMetadata(root);
+  assert.equal(validation.valid, false);
+  assert.ok(validation.errors.some((error) => error.formatted.includes('delegation.json/leadProvider')));
+});
+
+test('schema validator enforces oneOf instead of silently accepting every branch', async () => {
+  const schema = await loadSchema('delegation-config');
+  const valid = validateJson({
+    schemaVersion: 'hds-delegation/v1',
+    defaultAccess: 'read-only',
+    leadProvider: null,
+    leadModel: null,
+    autoReview: true,
+    providers: {},
+  }, schema);
+  assert.equal(valid.valid, true);
+
+  const syntheticSchema = {
+    oneOf: [
+      { type: 'string' },
+      { type: 'null' },
+    ],
+  };
+  assert.equal(validateJson('lead', syntheticSchema).valid, true);
+  assert.equal(validateJson(7, syntheticSchema).valid, false);
 });
