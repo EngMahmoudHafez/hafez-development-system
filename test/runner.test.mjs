@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -353,4 +353,26 @@ test('autopilot infers material owner decisions from risky question text', async
 
   assert.equal(result.status, 'paused');
   assert.equal(result.reason, 'decision-required');
+});
+
+
+test('autopilot persists the exact owner decision context across sessions', async () => {
+  const root = await adoptedProject();
+  await updateState(root, {
+    openQuestions: [{
+      question: 'Should pricing be monthly or usage-based?',
+      requiresOwner: true,
+      category: 'business',
+    }],
+  });
+
+  const result = await runAutonomous(root, { execute: true, autoAdopt: true, maxSteps: 8 });
+  assert.equal(result.reason, 'decision-required');
+
+  const autopilot = JSON.parse(await readFile(path.join(root, '.hafez', 'autopilot.json'), 'utf8'));
+  assert.equal(autopilot.waitingForOwner, true);
+  assert.equal(autopilot.ownerDecision.reason, 'decision-required');
+  assert.equal(autopilot.ownerDecision.items.length, 1);
+  assert.match(autopilot.ownerDecision.items[0].question, /pricing/i);
+  assert.match(autopilot.ownerDecision.boundary, /materially affects/i);
 });
