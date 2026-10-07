@@ -228,6 +228,70 @@
         }
       },
       "additionalProperties": false
+    },
+    "attemptMemory": {
+      "type": "array",
+      "maxItems": 5,
+      "items": {
+        "type": "object",
+        "required": [
+          "taskId",
+          "provider",
+          "workerTier",
+          "attempt",
+          "status",
+          "summary",
+          "blockers",
+          "reviewVerdict",
+          "reviewSummary"
+        ],
+        "properties": {
+          "taskId": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "workerTier": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "attempt": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "status": {
+            "type": "string"
+          },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "blockers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "reviewVerdict": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reviewSummary": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
     }
   },
   "additionalProperties": false

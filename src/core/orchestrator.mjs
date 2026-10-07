@@ -1,5 +1,5 @@
 import { autoReviewDelegation, executeDelegationAndIngest, prepareDelegation, providerStatus, selectLeadProvider } from './providers.mjs';
-import { integrateDelegation, readDelegationContext, retireDelegation } from './delegation.mjs';
+import { integrateDelegation, readDelegationAttemptMemory, readDelegationContext, retireDelegation } from './delegation.mjs';
 import { verifyProject } from './verifier.mjs';
 import { ownerDecisionItems } from './decision-policy.mjs';
 import { updateWorkUnitStatus } from './work-units.mjs';
@@ -185,6 +185,7 @@ export async function continueDelegation(root, taskId, options = {}) {
     return { decision, packet: null, retired: null };
   }
 
+  const attemptMemory = await readDelegationAttemptMemory(root, taskId, 5);
   const retired = await retireDelegation(root, taskId, decision.reason);
   const provider = options.provider
     ?? decision.nextProvider
@@ -201,6 +202,7 @@ export async function continueDelegation(root, taskId, options = {}) {
     parentTaskId: context.packet.id,
     workUnitId: context.packet.workUnitId ?? null,
     attempt: decision.nextAttempt,
+    attemptMemory,
     reviewRequired: context.packet.reviewRequired,
   });
 

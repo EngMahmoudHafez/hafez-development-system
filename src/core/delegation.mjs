@@ -107,6 +107,39 @@ export async function readDelegationContext(root, taskId) {
   };
 }
 
+function boundedText(value, max = 600) {
+  const text = typeof value === 'string' ? value : JSON.stringify(value ?? '');
+  return text.length <= max ? text : `${text.slice(0, max)}…`;
+}
+
+export async function readDelegationAttemptMemory(root, taskId, limit = 5) {
+  const memory = [];
+  const seen = new Set();
+  let currentTaskId = taskId;
+
+  while (currentTaskId && memory.length < limit && !seen.has(currentTaskId)) {
+    seen.add(currentTaskId);
+    const context = await readDelegationContext(root, currentTaskId);
+    if (!context.packet) break;
+    memory.push({
+      taskId: currentTaskId,
+      provider: context.packet.provider,
+      workerTier: context.packet.workerTier ?? null,
+      attempt: context.packet.attempt ?? 1,
+      status: context.result?.status ?? 'pending',
+      summary: context.result?.summary ? boundedText(context.result.summary) : null,
+      blockers: Array.isArray(context.result?.blockers)
+        ? context.result.blockers.slice(0, 5).map((item) => boundedText(item, 240))
+        : [],
+      reviewVerdict: context.review?.verdict ?? null,
+      reviewSummary: context.review?.summary ? boundedText(context.review.summary) : null,
+    });
+    currentTaskId = context.packet.parentTaskId ?? null;
+  }
+
+  return memory.reverse();
+}
+
 function assertStringArray(value, field) {
   if (!Array.isArray(value) || value.some((item) => typeof item !== 'string')) {
     throw new Error(`Delegation result field ${field} must be an array of strings.`);

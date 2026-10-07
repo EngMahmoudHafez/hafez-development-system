@@ -141,6 +141,11 @@ test('failed writer attempt is retired and automatically replaced with a retry p
   assert.equal(continued.packet.parentTaskId, first.id);
   assert.equal(continued.packet.attempt, 2);
   assert.equal(continued.packet.workerTier, 'worker');
+  assert.equal(continued.packet.attemptMemory.length, 1);
+  assert.equal(continued.packet.attemptMemory[0].taskId, first.id);
+  assert.equal(continued.packet.attemptMemory[0].status, 'failed');
+  assert.match(continued.packet.attemptMemory[0].summary, /first approach/);
+  assert.deepEqual(continued.packet.attemptMemory[0].blockers, ['Null input still fails the parser test.']);
   assert.match(continued.packet.task, /Previous summary: The first approach/);
   assert.match(continued.packet.task, /Previous blockers: Null input/);
 
