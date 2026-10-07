@@ -290,12 +290,42 @@ export function executeDelegation(packet) {
   };
 }
 
+function syntheticProviderFailure(packet, error) {
+  return {
+    schemaVersion: 'hds-delegation-result/v1',
+    taskId: packet.id,
+    provider: packet.provider,
+    status: 'failed',
+    baseRevision: packet.baseRevision ?? null,
+    worktreeRevision: packet.worktree?.head ?? packet.baseRevision ?? null,
+    summary: 'The delegated provider did not produce a valid structured result.',
+    changedFiles: [],
+    commandsRun: [],
+    commits: [],
+    verification: [],
+    risks: [],
+    blockers: ['Provider execution failed before a valid structured result was produced.'],
+    nextAction: 'retry or escalate through Hafez',
+    failureKind: 'provider',
+  };
+}
+
 export async function executeDelegationAndIngest(packet) {
-  const execution = executeDelegation(packet);
-  const ingested = await ingestDelegationResult(packet.projectRoot, packet.id, execution.structuredResult);
+  let execution;
+  let result;
+  try {
+    execution = executeDelegation(packet);
+    result = execution.structuredResult;
+  } catch (error) {
+    result = syntheticProviderFailure(packet, error);
+    execution = { status: 1, stdout: '', stderr: '', providerError: true };
+  }
+
+  const ingested = await ingestDelegationResult(packet.projectRoot, packet.id, result);
   return {
     status: execution.status,
-    result: execution.structuredResult,
+    providerError: Boolean(execution.providerError),
+    result,
     readiness: ingested.readiness,
   };
 }
