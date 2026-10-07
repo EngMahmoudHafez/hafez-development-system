@@ -29,8 +29,9 @@ Then loop until completion or a genuine decision boundary:
    - `owner-decision`: pause and ask the project owner.
 9. A rejected or failed worker is not a reason to stop. Clean up its abandoned worktree/reservation, preserve the reason in the next packet, and continue using the returned retry/escalation decision.
 10. Integrate only approved results with `hafez delegation-integrate <task-id>`.
-11. Run required gates after integration. If they fail, diagnose, repair, and rerun automatically.
-12. Re-run `hafez autopilot <path> --json` after every meaningful transition.
+11. Treat integration as provisional until required gates pass on the integration tree. `hafez delegation-cycle` must run post-integration verification automatically.
+12. If post-integration verification fails, route directly to `hafez-debug`, repair the integration tree, and rerun required gates without asking the owner.
+13. Re-run `hafez autopilot <path> --json` after every meaningful transition.
 
 Do not stop merely because a test fails, a linter reports issues, a worker fails, or a recoverable merge/review problem appears. Repair or re-delegate first.
 

@@ -7,6 +7,7 @@ import test from 'node:test';
 import { inspectProject } from '../src/core/inspector.mjs';
 import { runAutonomous } from '../src/core/runner.mjs';
 import { adoptProject, loadProjectState, saveState } from '../src/core/state.mjs';
+import { prepareDelegation } from '../src/core/providers.mjs';
 
 test('autopilot continuity marker survives session boundaries and instructs automatic resume', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'hds-hook-autopilot-'));
@@ -58,4 +59,33 @@ test('autopilot continuity marker prevents automatic continuation across an owne
   const context = output.hookSpecificOutput.additionalContext;
   assert.match(context, /waitingForOwner=true/);
   assert.match(context, /Do not continue past the recorded owner decision boundary/);
+});
+
+
+test('session hook restores active delegation identifiers before planning new work', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'hds-hook-delegation-'));
+  await writeFile(path.join(root, 'package.json'), JSON.stringify({ name: 'delegation-hook-fixture' }));
+  await runAutonomous(root, { execute: true, autoAdopt: true, maxSteps: 1 });
+
+  const packet = await prepareDelegation(root, {
+    provider: 'codex',
+    role: 'scout',
+    task: 'Inspect the current failure.',
+    access: 'read-only',
+    allowedPaths: [],
+    allowedCommands: [],
+    workerTier: 'scout',
+  });
+
+  const hook = spawnSync(process.execPath, [path.resolve('hooks/session-context.mjs')], {
+    cwd: root,
+    input: JSON.stringify({ cwd: root, hook_event_name: 'SessionStart' }),
+    encoding: 'utf8',
+  });
+  assert.equal(hook.status, 0, hook.stderr);
+  const output = JSON.parse(hook.stdout);
+  const context = output.hookSpecificOutput.additionalContext;
+  assert.match(context, new RegExp(packet.id));
+  assert.match(context, /status=pending/);
+  assert.match(context, /Resume these active delegation tasks/);
 });

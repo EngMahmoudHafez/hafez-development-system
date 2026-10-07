@@ -6,7 +6,12 @@
     "name": "Mahmoud Hafez"
   },
   "license": "MIT",
-  "keywords": ["project-lifecycle", "skills", "delegation", "orchestration"],
+  "keywords": [
+    "project-lifecycle",
+    "skills",
+    "delegation",
+    "orchestration"
+  ],
   "skills": "./skills/",
   "interface": {
     "displayName": "Hafez Development System",
@@ -14,8 +19,11 @@
     "longDescription": "Use natural language to start, understand, resume, build, verify, delegate, and hand off software projects with durable repository state.",
     "developerName": "Mahmoud Hafez",
     "category": "Productivity",
-    "capabilities": ["Read", "Write"],
-    "defaultPrompt": "Use Hafez to inspect or resume this project and continue to the next verified milestone, pausing only for a genuine decision.",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": "Use Hafez Autopilot to safely adopt or resume this project and continue through implementation, helper-model delegation, lead review, debugging, integration, and verification until a verified milestone. Do not stop for recoverable technical failures; ask me only at a genuine product, architecture, authority, or destructive decision boundary.",
     "logo": "./assets/hafez-logo.svg",
     "composerIcon": "./assets/hafez-composer.svg"
   }

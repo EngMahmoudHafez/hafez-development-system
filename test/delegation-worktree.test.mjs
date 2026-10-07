@@ -84,6 +84,14 @@ test('write delegation uses one managed worktree and accepts only scoped verifie
   const integrated = await integrateDelegation(root, packet.id);
   assert.equal(integrated.integrated, true);
   assert.equal(git(root, ['show', '--format=', '--name-only', 'HEAD']).trim(), 'docs/result.md');
+
+  const terminalQueue = await listIntegrationQueue(root);
+  assert.deepEqual(
+    terminalQueue.items.map((item) => [item.taskId, item.status, item.terminal, item.ready]),
+    [[packet.id, 'integrated', true, false]],
+  );
+  assert.ok(terminalQueue.items[0].reasons.includes('Delegation is already integrated.'));
+  await assert.rejects(() => integrateDelegation(root, packet.id), /already integrated/);
 });
 
 test('write delegation rejects unsafe scope declarations', async () => {

@@ -1,4 +1,4 @@
 interface:
   display_name: "Hafez — Run This Project"
-  short_description: "Start, recover, and finish software projects"
-  default_prompt: "Use $hafez to inspect or resume this project and continue to the next verified milestone, pausing only for a genuine decision."
+  short_description: "Start, recover, delegate, and finish projects continuously"
+  default_prompt: "Use $hafez-autopilot to safely adopt or resume this project, delegate bounded work to helper models, review and integrate their results, repair recoverable failures, and continue until the next verified milestone. Ask me only at a genuine project-owner decision boundary."

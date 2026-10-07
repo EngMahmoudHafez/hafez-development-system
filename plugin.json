@@ -10,7 +10,12 @@
   "homepage": "https://github.com/EngMahmoudHafez/hafez-development-system",
   "repository": "https://github.com/EngMahmoudHafez/hafez-development-system",
   "license": "MIT",
-  "keywords": ["project-lifecycle", "skills", "delegation", "orchestration"],
+  "keywords": [
+    "project-lifecycle",
+    "skills",
+    "delegation",
+    "orchestration"
+  ],
   "skills": "./skills/",
   "extensions": {
     "com.openai": {
@@ -22,11 +27,14 @@
         "longDescription": "Use natural language to start a new project or safely understand and continue an existing codebase. Hafez routes work through focused skills for inspection, durable state, vertical slices, architecture, verification, delegation, and handoff.",
         "developerName": "Mahmoud Hafez",
         "category": "Productivity",
-        "capabilities": ["Read", "Write"],
+        "capabilities": [
+          "Read",
+          "Write"
+        ],
         "defaultPrompt": [
-          "Use Hafez to understand this project and continue to the next verified milestone.",
-          "Resume the active slice and keep working until a genuine decision is required.",
-          "Plan and deliver the next Laravel and Nuxt vertical slice."
+          "Use Hafez Autopilot to take over this project, safely adopt it if needed, and continue through implementation, delegation, review, debugging, integration, and verification until the next verified milestone. Use helper models for bounded work and ask me only at a genuine product, architecture, authority, or destructive decision boundary.",
+          "Resume the active Hafez Autopilot loop. Do not stop for recoverable test, worker, provider, or integration failures; repair, retry, fail over, or escalate automatically.",
+          "Deliver the next vertical slice using the strongest model as lead reviewer/integrator and helper models for safe bounded work."
         ],
         "logo": "./assets/hafez-logo.svg",
         "composerIcon": "./assets/hafez-composer.svg",

@@ -17,6 +17,7 @@ function delegationPaths(root, taskId) {
     result: path.join(directory, `${taskId}.result.json`),
     review: path.join(directory, `${taskId}.review.json`),
     retired: path.join(directory, `${taskId}.retired.json`),
+    integrated: path.join(directory, `${taskId}.integrated.json`),
     reservation: path.join(directory, 'writer-reservation.json'),
   };
 }
@@ -187,8 +188,10 @@ export async function checkIntegrationReadiness(root, taskId) {
   const packet = await readJson(paths.packet, null);
   const result = await readJson(paths.result, null);
   const review = await readJson(paths.review, null);
+  const integrated = await readJson(paths.integrated, null);
   const reasons = [];
   if (!packet) return { ready: false, reasons: ['Delegation packet is missing.'] };
+  if (integrated) return { ready: false, integrated: true, reasons: ['Delegation is already integrated.'] };
   if (packet.access !== 'write-worktree') reasons.push('Read-only delegations do not produce integratable changes.');
   if (!result) reasons.push('Structured delegation result is missing.');
   if (result?.status !== 'completed') reasons.push('Delegation did not complete successfully.');
@@ -344,11 +347,23 @@ export async function integrateDelegation(root, taskId) {
   const { discardManagedWorktree } = await import('../lib/git-worktrees.mjs');
   discardManagedWorktree(root, packet.worktree.path);
   await releaseWriterReservation(root, packet.id, packet.reservation.id);
+  const revision = inspectGit(root).revision;
+  const integrated = {
+    schemaVersion: 'hds-delegation-integration/v1',
+    taskId,
+    baseRevision: packet.baseRevision,
+    delegatedRevision: result.worktreeRevision,
+    integratedRevision: revision,
+    commits,
+    integratedAt: new Date().toISOString(),
+  };
+  await writeJson(paths.integrated, integrated);
   return {
     taskId,
     integrated: true,
     commits,
-    revision: inspectGit(root).revision,
+    revision,
+    integrationPath: paths.integrated,
   };
 }
 
@@ -366,12 +381,18 @@ export async function listIntegrationQueue(root) {
     const packet = await readJson(delegationPacketPath(root, taskId), null);
     const result = await readJson(delegationResultPath(root, taskId), null);
     const retired = await readJson(delegationPaths(root, taskId).retired, null);
-    const readiness = retired ? { ready: false, reasons: [`Delegation retired: ${retired.reason}`] } : await checkIntegrationReadiness(root, taskId);
+    const integrated = await readJson(delegationPaths(root, taskId).integrated, null);
+    const readiness = integrated
+      ? { ready: false, reasons: ['Delegation is already integrated.'] }
+      : retired
+        ? { ready: false, reasons: [`Delegation retired: ${retired.reason}`] }
+        : await checkIntegrationReadiness(root, taskId);
     items.push({
       taskId,
       provider: result?.provider ?? packet?.provider ?? null,
       access: packet?.access ?? null,
-      status: retired ? 'retired' : (result?.status ?? 'pending'),
+      status: integrated ? 'integrated' : (retired ? 'retired' : (result?.status ?? 'pending')),
+      terminal: Boolean(integrated || retired),
       review: reviewStatus(await readJson(delegationPaths(root, taskId).review, null)),
       ...readiness,
     });

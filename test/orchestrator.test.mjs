@@ -284,3 +284,127 @@ test('delegation cycle automatically fails over after provider execution failure
   const active = finalContext.items.find((item) => item.taskId === cycle.currentTaskId);
   assert.equal(active.provider, 'gemini');
 });
+
+
+test('delegation cycle verifies the integration tree after an approved writer merge', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'hds-orchestrator-post-integration-'));
+  git(root, 'init', '-q');
+  git(root, 'config', 'user.name', 'Hafez Tests');
+  git(root, 'config', 'user.email', 'hafez-tests@example.invalid');
+  await writeFile(path.join(root, 'README.md'), '# Fixture\n');
+  await adoptProject(await inspectProject(root));
+  git(root, 'add', '.');
+  git(root, 'commit', '-qm', 'fixture');
+
+  const packet = await prepareDelegation(root, {
+    provider: 'codex',
+    role: 'implementer',
+    task: 'Update scoped docs.',
+    access: 'write-worktree',
+    allowedPaths: ['docs'],
+    allowedCommands: ['node --test'],
+    workerTier: 'worker',
+  });
+
+  await writeFile(path.join(packet.worktree.path, 'docs', 'cycle.md'), '# Cycle\n');
+  git(packet.worktree.path, 'add', 'docs/cycle.md');
+  git(packet.worktree.path, 'commit', '-qm', 'docs: add cycle');
+  const head = git(packet.worktree.path, 'rev-parse', 'HEAD');
+
+  await ingestDelegationResult(root, packet.id, {
+    schemaVersion: 'hds-delegation-result/v1',
+    taskId: packet.id,
+    provider: packet.provider,
+    status: 'completed',
+    baseRevision: packet.baseRevision,
+    worktreeRevision: head,
+    summary: 'Updated scoped docs.',
+    changedFiles: ['docs/cycle.md'],
+    commandsRun: ['node --test'],
+    commits: [head],
+    verification: [{ command: 'node --test', status: 'passed' }],
+    risks: [],
+    blockers: [],
+    nextAction: 'review',
+  });
+  const { recordDelegationReview } = await import('../src/core/delegation.mjs');
+  await recordDelegationReview(root, packet.id, {
+    verdict: 'approved',
+    summary: 'Scoped change is safe.',
+  });
+
+  let verified = 0;
+  const cycle = await runDelegationCycle(root, packet.id, {
+    verifyIntegration: async () => {
+      verified += 1;
+      return { allPassed: true, evidencePath: '/tmp/evidence.json', results: [{ id: 'test', status: 'passed', required: true }] };
+    },
+  });
+
+  assert.equal(cycle.status, 'completed');
+  assert.equal(cycle.reason, 'delegation-integrated-and-verified');
+  assert.equal(cycle.verification.allPassed, true);
+  assert.equal(verified, 1);
+});
+
+test('post-integration gate failure stays in the technical continuation loop', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'hds-orchestrator-post-integration-fail-'));
+  git(root, 'init', '-q');
+  git(root, 'config', 'user.name', 'Hafez Tests');
+  git(root, 'config', 'user.email', 'hafez-tests@example.invalid');
+  await writeFile(path.join(root, 'README.md'), '# Fixture\n');
+  await adoptProject(await inspectProject(root));
+  git(root, 'add', '.');
+  git(root, 'commit', '-qm', 'fixture');
+
+  const packet = await prepareDelegation(root, {
+    provider: 'codex',
+    role: 'implementer',
+    task: 'Update scoped docs.',
+    access: 'write-worktree',
+    allowedPaths: ['docs'],
+    allowedCommands: ['node --test'],
+    workerTier: 'worker',
+  });
+
+  await writeFile(path.join(packet.worktree.path, 'docs', 'cycle-fail.md'), '# Cycle Fail\n');
+  git(packet.worktree.path, 'add', 'docs/cycle-fail.md');
+  git(packet.worktree.path, 'commit', '-qm', 'docs: add cycle failure fixture');
+  const head = git(packet.worktree.path, 'rev-parse', 'HEAD');
+
+  await ingestDelegationResult(root, packet.id, {
+    schemaVersion: 'hds-delegation-result/v1',
+    taskId: packet.id,
+    provider: packet.provider,
+    status: 'completed',
+    baseRevision: packet.baseRevision,
+    worktreeRevision: head,
+    summary: 'Updated scoped docs.',
+    changedFiles: ['docs/cycle-fail.md'],
+    commandsRun: ['node --test'],
+    commits: [head],
+    verification: [{ command: 'node --test', status: 'passed' }],
+    risks: [],
+    blockers: [],
+    nextAction: 'review',
+  });
+  const { recordDelegationReview } = await import('../src/core/delegation.mjs');
+  await recordDelegationReview(root, packet.id, {
+    verdict: 'approved',
+    summary: 'Scoped change is safe before integration verification.',
+  });
+
+  const cycle = await runDelegationCycle(root, packet.id, {
+    verifyIntegration: async () => ({
+      allPassed: false,
+      evidencePath: '/tmp/failed-evidence.json',
+      results: [{ id: 'test', status: 'failed', required: true }],
+    }),
+  });
+
+  assert.equal(cycle.status, 'ready');
+  assert.equal(cycle.reason, 'post-integration-verification-failed');
+  assert.equal(cycle.continuationRequired, true);
+  assert.equal(cycle.verification.allPassed, false);
+  assert.match(cycle.nextSafeAction, /Debug and repair/);
+});

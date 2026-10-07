@@ -93,7 +93,9 @@ hafez init . --architecture-profile laravel-domain-slices-v1 --apply
                          # explicitly opt in to the strict Laravel baseline
 hafez run .              # show one bounded next action
 hafez run . --execute    # execute deterministic gates/handoffs
-hafez autopilot .        # safe auto-adopt + continuous host-agent loop
+hafez start .            # simplest: safe auto-adopt + continuous host-agent loop
+hafez autopilot .        # same continuous mode, explicit name
+hafez autopilot-status . # show continuity, owner boundary, providers, and delegation queue
 hafez delegation-next <task-id>      # decide review/retry/escalate/integrate/owner boundary
 hafez delegation-continue <task-id>  # retire failed attempt and create the next retry/escalation packet
 ```
@@ -240,7 +242,9 @@ external isolation; Zed and Antigravity Desktop are treated as hosts rather than
 Write-capable task packets now create one managed detached worktree, one writer reservation, explicit
 path and command scopes, a base revision, and a structured result. A write result is not integratable
 until a lead reviewer approves the exact delegated revision; `hafez delegation-integrate <task-id>`
-then performs the deterministic cherry-pick only after all readiness checks pass. Failed or rejected workers can be continued with `hafez delegation-continue <task-id>`. Hafez
+then performs the deterministic cherry-pick only after all readiness checks pass. Integration is
+still provisional: Hafez reruns the project's required gates on the integration tree. A failing
+post-integration gate routes back into the debug/repair loop instead of becoming an owner stop. Failed or rejected workers can be continued with `hafez delegation-continue <task-id>`. Hafez
 retires the old attempt without deleting its evidence, carries failure/review context forward, retries
 at the current tier, then escalates worker → specialist → lead when retries are exhausted. Technical
 failure is not a project-owner decision. Interrupted write tasks remain visible in

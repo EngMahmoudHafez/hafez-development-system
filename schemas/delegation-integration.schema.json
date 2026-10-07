@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hafez.dev/schemas/delegation-integration.schema.json",
+  "title": "HDS delegation integration receipt",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "taskId",
+    "baseRevision",
+    "delegatedRevision",
+    "integratedRevision",
+    "commits",
+    "integratedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "hds-delegation-integration/v1"
+    },
+    "taskId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "baseRevision": {
+      "type": "string",
+      "minLength": 1
+    },
+    "delegatedRevision": {
+      "type": "string",
+      "minLength": 1
+    },
+    "integratedRevision": {
+      "type": "string",
+      "minLength": 1
+    },
+    "commits": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "uniqueItems": true
+    },
+    "integratedAt": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "additionalProperties": false
+}
