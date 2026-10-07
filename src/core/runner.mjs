@@ -8,7 +8,7 @@ import { adoptProject } from './state.mjs';
 import { readJson, writeJson } from '../lib/files.mjs';
 import { isDestructiveDecision, ownerDecisionItems, requiresExternalAuthority } from './decision-policy.mjs';
 import { buildDispatchPlan, prepareDispatch } from './work-dispatch.mjs';
-import { completeActiveSlice } from './work-units.mjs';
+import { activateNextRunnableSlice, completeActiveSlice, findNextRunnableSlice } from './work-units.mjs';
 import { autoDecomposeActiveSlice } from './providers.mjs';
 
 const DEFAULT_MAX_STEPS = 8;
@@ -311,9 +311,21 @@ async function continuousSliceAction(resume, managed) {
 
 async function actionTransition(resume, managed, continuous) {
   const baseAction = chooseAction(resume, managed, continuous);
-  const action = continuous && baseAction.id === 'continue-active-slice'
+  let action = continuous && baseAction.id === 'continue-active-slice'
     ? (await continuousSliceAction(resume, managed) ?? baseAction)
     : baseAction;
+
+  if (continuous && baseAction.id === 'create-handoff') {
+    const nextSlice = await findNextRunnableSlice(resume.root);
+    if (nextSlice) {
+      action = commandAction(
+        'activate-next-slice',
+        `Activate and continue the next known slice ${nextSlice.id}: ${nextSlice.title}.`,
+        'hafez start .',
+      );
+      action.nextSlice = nextSlice;
+    }
+  }
   const outcome = stop('ready', 'action-queued', {
     nextSafeAction: action.description,
     decisionBoundary: 'The runner plans actions only; an authorized agent or user must execute the queued action.',
@@ -356,6 +368,7 @@ export async function runAutonomous(inputPath = '.', options = {}) {
   const maxSteps = parseMaxSteps(options.maxSteps);
   const execute = options.execute === true;
   const autoAdopt = options.autoAdopt === true;
+  const dispatchWork = options.prepareDispatch ?? prepareDispatch;
   const trace = [];
   let adopted = null;
 
@@ -408,12 +421,26 @@ export async function runAutonomous(inputPath = '.', options = {}) {
           });
       } else if (execute && transition.action.id === 'dispatch-ready-work') {
         transition.action.autoExecuted = true;
-        transition.action.result = await prepareDispatch(root, { execute: true, maxSteps });
-        outcome = stop('ready', 'delegations-dispatched', {
-          continuationRequired: true,
-          decisionBoundary: null,
-          nextSafeAction: 'Review returned delegation cycles, handle lead review if requested, then continue autopilot.',
-        });
+        transition.action.result = await dispatchWork(root, { execute: true, maxSteps });
+        const cycles = transition.action.result.executions
+          .map((entry) => entry.cycle)
+          .filter(Boolean);
+        const ownerPause = cycles.find((cycle) => cycle.reason === 'owner-decision-required' || cycle.status === 'paused');
+        if (ownerPause) {
+          outcome = stop('paused', 'decision-required', {
+            questions: ownerPause.decision?.blockers ?? [],
+            continuationRequired: false,
+            decisionBoundary: 'A delegated task reached a material owner decision boundary.',
+          });
+        } else {
+          machine = { root, phase: 'resume', resume: null, managed: null, continuous: autoAdopt };
+          continue;
+        }
+      } else if (execute && transition.action.id === 'activate-next-slice') {
+        transition.action.autoExecuted = true;
+        transition.action.result = await activateNextRunnableSlice(root);
+        machine = { root, phase: 'resume', resume: null, managed: null, continuous: autoAdopt };
+        continue;
       } else if (execute && transition.action.id === 'create-handoff') {
         transition.action.autoExecuted = true;
         transition.action.result = await createHandoff(root);
