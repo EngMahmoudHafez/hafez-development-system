@@ -10,7 +10,7 @@ import { executeDelegationAndIngest, prepareDelegation, providerStatus } from '.
 import { listSkills } from './core/skill-registry.mjs';
 import { auditArchitecture } from './core/architecture.mjs';
 import { runAutonomous } from './core/runner.mjs';
-import { continueDelegation, decideDelegationContinuation, planDelegationTopology } from './core/orchestrator.mjs';
+import { continueDelegation, decideDelegationContinuation, planDelegationTopology, runDelegationCycle } from './core/orchestrator.mjs';
 import { validateProjectMetadata } from './core/metadata-validator.mjs';
 import { migrateFiles, migrationTargets } from './core/migrations.mjs';
 import { initializeWorkspace, inspectWorkspace, verifyWorkspace } from './core/workspace.mjs';
@@ -34,6 +34,7 @@ Usage:
   hafez delegation-status <task-id> [--path <path>]
   hafez delegation-next <task-id> [--path <path>]
   hafez delegation-continue <task-id> [--provider <provider>] [--model <model>] [--execute] [--path <path>]
+  hafez delegation-cycle <task-id> [--max-steps N] [--path <path>]
   hafez delegation-review <task-id> --verdict approved|rejected --summary <text> [--reviewer <name>] [--path <path>]
   hafez delegation-integrate <task-id> [--path <path>]
   hafez delegation-abort <task-id> [--path <path>]
@@ -223,6 +224,14 @@ async function runDelegationContinue(positionals, flags) {
   };
 }
 
+async function runDelegationCycleCommand(positionals, flags) {
+  const taskId = positionals[1];
+  if (!taskId) throw new Error('Usage: hafez delegation-cycle <task-id> [--max-steps N] [--path <path>]');
+  return runDelegationCycle(path.resolve(flags.path || '.'), taskId, {
+    maxSteps: flags['max-steps'],
+  });
+}
+
 async function runDelegationReview(positionals, flags) {
   const taskId = positionals[1];
   if (!taskId || !flags.verdict || !flags.summary) {
@@ -266,6 +275,7 @@ export async function main(argv) {
   else if (command === 'delegation-status') result = await runDelegationStatus(positionals, flags);
   else if (command === 'delegation-next') result = await runDelegationNext(positionals, flags);
   else if (command === 'delegation-continue') result = await runDelegationContinue(positionals, flags);
+  else if (command === 'delegation-cycle') result = await runDelegationCycleCommand(positionals, flags);
   else if (command === 'delegation-review') result = await runDelegationReview(positionals, flags);
   else if (command === 'delegation-integrate') result = await runDelegationIntegrate(positionals, flags);
   else if (command === 'delegation-abort') result = await runDelegationAbort(positionals, flags);
