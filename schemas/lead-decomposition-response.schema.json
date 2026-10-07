@@ -6,7 +6,8 @@
   "required": [
     "schemaVersion",
     "summary",
-    "workUnits"
+    "workUnits",
+    "ownerDecision"
   ],
   "properties": {
     "schemaVersion": {
@@ -106,6 +107,42 @@
         },
         "additionalProperties": false
       }
+    },
+    "ownerDecision": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "required": [
+            "question",
+            "category",
+            "reason"
+          ],
+          "properties": {
+            "question": {
+              "type": "string",
+              "minLength": 1
+            },
+            "category": {
+              "enum": [
+                "product",
+                "business",
+                "architecture",
+                "legal",
+                "compliance",
+                "privacy"
+              ]
+            },
+            "reason": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
     }
   },
   "additionalProperties": false
