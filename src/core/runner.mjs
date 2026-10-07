@@ -6,30 +6,10 @@ import { createHandoff } from './handoff.mjs';
 import { inspectProject } from './inspector.mjs';
 import { adoptProject } from './state.mjs';
 import { readJson, writeJson } from '../lib/files.mjs';
+import { isDestructiveDecision, ownerDecisionItems, requiresExternalAuthority } from './decision-policy.mjs';
 
 const DEFAULT_MAX_STEPS = 8;
 const MAX_ALLOWED_STEPS = 100;
-
-const externalAuthorityPatterns = [
-  /\bcredential(?:s)?\b/i,
-  /\bsecret(?:s)?\b/i,
-  /\bpayment\b/i,
-  /\bpublish(?:ing)?\b/i,
-  /\bproduction\b/i,
-  /\bdeploy(?:ment|ing)?\b/i,
-  /\bexternal communication\b/i,
-  /\bsend (?:an? )?(?:email|message)\b/i,
-];
-
-const destructivePatterns = [
-  /\bdelete\b/i,
-  /\bdrop (?:the )?(?:database|table|schema)\b/i,
-  /\breset --hard\b/i,
-  /\bforce[- ]push\b/i,
-  /\boverwrite\b/i,
-  /\bdestroy\b/i,
-  /\bpurge\b/i,
-];
 
 function parseMaxSteps(value) {
   if (value === undefined) return DEFAULT_MAX_STEPS;
@@ -54,38 +34,6 @@ function matchesAny(text, patterns) {
   return patterns.some((pattern) => pattern.test(text));
 }
 
-const ownerDecisionPatterns = [
-  /\bpricing\b/i,
-  /\bbilling\b/i,
-  /\bbusiness model\b/i,
-  /\bproduct decision\b/i,
-  /\buser-visible behavior\b/i,
-  /\bbreak(?:ing)? change\b/i,
-  /\bbackward compatibility\b/i,
-  /\bpublic api\b.*\b(change|shape|contract|version)\b/i,
-  /\bauth(?:entication)? strategy\b/i,
-  /\bdata retention\b/i,
-  /\blegal\b/i,
-  /\bcompliance\b/i,
-  /\bprivacy\b/i,
-  /\barchitecture decision\b/i,
-];
-
-function explicitlyRequiresOwner(value) {
-  return Boolean(value && typeof value === 'object' && value.requiresOwner === true);
-}
-
-function isOwnerDecision(value) {
-  if (explicitlyRequiresOwner(value)) return true;
-  const text = valueText(value);
-  return matchesAny(text, ownerDecisionPatterns)
-    || matchesAny(text, externalAuthorityPatterns)
-    || matchesAny(text, destructivePatterns);
-}
-
-function ownerDecisionQuestions(state) {
-  return (state.openQuestions ?? []).filter(isOwnerDecision);
-}
 
 function stop(status, reason, details = {}) {
   return { status, reason, ...details };
@@ -111,10 +59,7 @@ function recordedBoundary(resume, state, project, continuous = false) {
   if (resume.blockers.length > 0) {
     const materialBlockers = resume.blockers.filter((blocker) => {
       const text = valueText(blocker);
-      return matchesAny(text, externalAuthorityPatterns)
-        || matchesAny(text, destructivePatterns)
-        || /\b(product|business|architecture) decision\b/i.test(text)
-        || /\buser-visible behavior\b/i.test(text);
+      return ownerDecisionItems([blocker]).length > 0;
     });
     if (!continuous || materialBlockers.length > 0) {
       return stop('blocked', 'blockers-present', {
@@ -146,7 +91,7 @@ function recordedBoundary(resume, state, project, continuous = false) {
   }
 
   if ((state.openQuestions ?? []).length > 0) {
-    const ownerQuestions = continuous ? ownerDecisionQuestions(state) : state.openQuestions;
+    const ownerQuestions = continuous ? ownerDecisionItems(state.openQuestions ?? []) : state.openQuestions;
     if (!continuous || ownerQuestions.length > 0) {
       return stop('paused', 'decision-required', {
         questions: ownerQuestions,
@@ -160,13 +105,13 @@ function recordedBoundary(resume, state, project, continuous = false) {
 
 function authorityBoundary(resume, state) {
   const proposedAction = state.nextSafeAction || resume.nextSafeAction || '';
-  if (matchesAny(proposedAction, destructivePatterns)) {
+  if (isDestructiveDecision(proposedAction)) {
     return stop('paused', 'destructive-authority-required', {
       proposedAction,
       decisionBoundary: 'The next action appears destructive or difficult to recover.',
     });
   }
-  if (matchesAny(proposedAction, externalAuthorityPatterns)) {
+  if (requiresExternalAuthority(proposedAction)) {
     return stop('paused', 'external-authority-required', {
       proposedAction,
       decisionBoundary: 'The next action requires credentials, production authority, publishing, payment, or communication outside the project.',
