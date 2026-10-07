@@ -478,14 +478,16 @@ export async function autoReviewDelegation(root, taskId, options = {}) {
     diff,
     options.leadModel ?? config.leadModel ?? null,
   );
-  if (!invocation || !commandExists(invocation.command)) {
+  if (!invocation || (!options.executeInvocation && !commandExists(invocation.command))) {
     return { reviewed: false, reason: 'lead-provider-unavailable', provider: leadProvider };
   }
-  const execution = run(invocation.command, invocation.args, {
-    cwd: invocation.cwd,
-    input: invocation.input,
-    timeout: Number(options.timeoutSeconds ?? 900) * 1000,
-  });
+  const execution = options.executeInvocation
+    ? await options.executeInvocation(invocation)
+    : run(invocation.command, invocation.args, {
+      cwd: invocation.cwd,
+      input: invocation.input,
+      timeout: Number(options.timeoutSeconds ?? 900) * 1000,
+    });
   if (execution.status !== 0) {
     return { reviewed: false, reason: 'lead-provider-failed', provider: leadProvider, exitCode: execution.status };
   }
@@ -636,15 +638,17 @@ export async function autoDecomposeActiveSlice(root, options = {}) {
     prompt,
     options.leadModel ?? config.leadModel ?? null,
   );
-  if (!invocation || !commandExists(invocation.command)) {
+  if (!invocation || (!options.executeInvocation && !commandExists(invocation.command))) {
     return { decomposed: false, reason: 'lead-provider-unavailable', provider: leadProvider };
   }
 
-  const execution = run(invocation.command, invocation.args, {
-    cwd: invocation.cwd,
-    input: invocation.input,
-    timeout: Number(options.timeoutSeconds ?? 900) * 1000,
-  });
+  const execution = options.executeInvocation
+    ? await options.executeInvocation(invocation)
+    : run(invocation.command, invocation.args, {
+      cwd: invocation.cwd,
+      input: invocation.input,
+      timeout: Number(options.timeoutSeconds ?? 900) * 1000,
+    });
   if (execution.status !== 0) {
     return { decomposed: false, reason: 'lead-provider-failed', provider: leadProvider, exitCode: execution.status };
   }
