@@ -56,3 +56,25 @@ test('provider invocation contracts preserve access and execution roots', () => 
   assert.equal(kimi.args[0], '-p');
   assert.equal(providerInvocation('zed', packet), null);
 });
+
+
+test('provider model routing keeps the lead strong and helpers cheap where aliases are stable', () => {
+  const base = {
+    role: 'implementer',
+    access: 'read-only',
+    projectRoot: '/project',
+    baseRevision: 'abc123',
+    task: 'Inspect the project.',
+    allowedPaths: [],
+    allowedCommands: [],
+  };
+
+  const scout = providerInvocation('gemini', { ...base, workerTier: 'scout' });
+  assert.deepEqual(scout.args.slice(0, 2), ['--model', 'flash']);
+
+  const lead = providerInvocation('gemini', { ...base, workerTier: 'lead' });
+  assert.deepEqual(lead.args.slice(0, 2), ['--model', 'pro']);
+
+  const explicit = providerInvocation('codex', { ...base, workerTier: 'worker', model: 'custom-model' });
+  assert.deepEqual(explicit.args.slice(0, 3), ['exec', '--model', 'custom-model']);
+});
