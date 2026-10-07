@@ -115,8 +115,16 @@ function assertStringArray(value, field) {
 export function validateDelegationResult(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Delegation result must be a JSON object.');
   if (value.schemaVersion !== 'hds-delegation-result/v1') throw new Error('Unsupported delegation result schema version.');
-  for (const field of ['taskId', 'provider', 'status', 'baseRevision', 'worktreeRevision', 'summary', 'nextAction']) {
+  for (const field of ['taskId', 'provider', 'status', 'summary', 'nextAction']) {
     if (typeof value[field] !== 'string' || value[field].length === 0) throw new Error(`Delegation result field ${field} is required.`);
+  }
+  for (const field of ['baseRevision', 'worktreeRevision']) {
+    if (value[field] !== null && (typeof value[field] !== 'string' || value[field].length === 0)) {
+      throw new Error(`Delegation result field ${field} must be a non-empty string or null.`);
+    }
+  }
+  if (value.failureKind !== undefined && value.failureKind !== null && !['task', 'provider', 'verification', 'environment'].includes(value.failureKind)) {
+    throw new Error('Delegation result failureKind is invalid.');
   }
   if (!['completed', 'blocked', 'failed'].includes(value.status)) throw new Error('Delegation result status is invalid.');
   for (const field of ['changedFiles', 'commandsRun', 'commits', 'risks', 'blockers']) assertStringArray(value[field], field);
@@ -135,6 +143,9 @@ export async function recordDelegationReview(root, taskId, review) {
   if (!review || typeof review !== 'object' || Array.isArray(review)) throw new Error('Delegation review must be an object.');
   if (!['approved', 'rejected'].includes(review.verdict)) throw new Error('Delegation review verdict must be approved or rejected.');
   if (typeof review.summary !== 'string' || review.summary.trim() === '') throw new Error('Delegation review requires a summary.');
+  if (typeof result.worktreeRevision !== 'string' || result.worktreeRevision.length === 0) {
+    throw new Error('Write-capable delegation review requires a concrete worktree revision.');
+  }
   const value = {
     schemaVersion: 'hds-delegation-review/v1',
     taskId,
