@@ -64,3 +64,46 @@ export async function completeActiveSlice(root) {
     status: 'ready',
   };
 }
+
+
+export async function findNextRunnableSlice(root) {
+  const resolvedRoot = path.resolve(root);
+  const managed = await loadProjectState(resolvedRoot);
+  if (!managed) throw new Error('Project is not adopted.');
+  const directory = path.join(resolvedRoot, 'docs', 'hafez', 'slices');
+  if (!fileExists(directory)) return null;
+
+  const entries = (await readdir(directory))
+    .filter((name) => /^S-[0-9]{2,4}-.+\.json$/i.test(name))
+    .sort();
+
+  for (const name of entries) {
+    const slicePath = path.join(directory, name);
+    const slice = await readJson(slicePath, null);
+    if (!slice || slice.id === managed.state.activeSlice) continue;
+    if (['planned', 'in-progress'].includes(slice.status)) {
+      return { id: slice.id, title: slice.title ?? slice.id, status: slice.status, slicePath };
+    }
+  }
+  return null;
+}
+
+export async function activateNextRunnableSlice(root) {
+  const next = await findNextRunnableSlice(root);
+  if (!next) return { activated: false, reason: 'no-runnable-slice' };
+
+  const managed = await loadProjectState(root);
+  managed.state.activeSlice = next.id;
+  managed.state.workflowState = 'in-progress';
+  managed.state.currentFocus = 'delivery';
+  managed.state.nextSafeAction = `Continue ${next.id} from its recorded work units and acceptance criteria.`;
+  await saveState(root, managed.state);
+
+  const slice = await readJson(next.slicePath, null);
+  if (slice?.status === 'planned') {
+    slice.status = 'in-progress';
+    await writeJson(next.slicePath, slice);
+  }
+
+  return { activated: true, ...next };
+}
