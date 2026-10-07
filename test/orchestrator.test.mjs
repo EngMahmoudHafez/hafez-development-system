@@ -1,6 +1,14 @@
 import assert from 'node:assert/strict';
+import { mkdtemp, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import test from 'node:test';
-import { decideDelegationContinuation, planDelegationTopology } from '../src/core/orchestrator.mjs';
+import { continueDelegation, decideDelegationContinuation, planDelegationTopology } from '../src/core/orchestrator.mjs';
+import { ingestDelegationResult, listIntegrationQueue } from '../src/core/delegation.mjs';
+import { inspectProject } from '../src/core/inspector.mjs';
+import { prepareDelegation } from '../src/core/providers.mjs';
+import { adoptProject } from '../src/core/state.mjs';
 
 test('delegation topology keeps the lead strong and helper writes serialized', () => {
   const plan = planDelegationTopology({
@@ -79,4 +87,66 @@ test('completed writer work moves through review then integration instead of sto
   assert.equal(decideDelegationContinuation(packet, result).action, 'review');
   assert.equal(decideDelegationContinuation(packet, result, { verdict: 'approved' }).action, 'integrate');
   assert.equal(decideDelegationContinuation(packet, result, { verdict: 'rejected' }).action, 'retry');
+});
+
+
+function git(root, ...args) {
+  const result = spawnSync('git', args, { cwd: root, encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+  return result.stdout.trim();
+}
+
+test('failed writer attempt is retired and automatically replaced with a retry packet', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'hds-orchestrator-retry-'));
+  git(root, 'init', '-q');
+  git(root, 'config', 'user.name', 'Hafez Tests');
+  git(root, 'config', 'user.email', 'hafez-tests@example.invalid');
+  await writeFile(path.join(root, 'README.md'), '# Fixture\n');
+  await adoptProject(await inspectProject(root));
+  git(root, 'add', '.');
+  git(root, 'commit', '-qm', 'fixture');
+
+  const first = await prepareDelegation(root, {
+    provider: 'codex',
+    role: 'implementer',
+    task: 'Repair the parser failure.',
+    access: 'write-worktree',
+    allowedPaths: ['src'],
+    allowedCommands: ['node --test'],
+    workerTier: 'worker',
+    attempt: 1,
+  });
+
+  await ingestDelegationResult(root, first.id, {
+    schemaVersion: 'hds-delegation-result/v1',
+    taskId: first.id,
+    provider: first.provider,
+    status: 'failed',
+    baseRevision: first.baseRevision,
+    worktreeRevision: first.baseRevision,
+    summary: 'The first approach did not handle null input.',
+    changedFiles: [],
+    commandsRun: [],
+    commits: [],
+    verification: [],
+    risks: [],
+    blockers: ['Null input still fails the parser test.'],
+    nextAction: 'retry with a narrower fix',
+  });
+
+  const continued = await continueDelegation(root, first.id);
+
+  assert.equal(continued.decision.action, 'retry');
+  assert.equal(continued.retired.retired, true);
+  assert.equal(continued.packet.parentTaskId, first.id);
+  assert.equal(continued.packet.attempt, 2);
+  assert.equal(continued.packet.workerTier, 'worker');
+  assert.match(continued.packet.task, /Previous summary: The first approach/);
+  assert.match(continued.packet.task, /Previous blockers: Null input/);
+
+  const queue = await listIntegrationQueue(root);
+  const retired = queue.items.find((item) => item.taskId === first.id);
+  const active = queue.items.find((item) => item.taskId === continued.packet.id);
+  assert.equal(retired.status, 'retired');
+  assert.equal(active.status, 'pending');
 });
