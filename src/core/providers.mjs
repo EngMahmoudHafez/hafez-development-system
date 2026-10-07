@@ -165,6 +165,10 @@ export async function prepareDelegation(root, options) {
   const provider = canonicalProvider(options.provider);
   if (!provider) throw new Error(`Unknown provider: ${options.provider}`);
   if (!['read-only', 'write-worktree'].includes(options.access)) throw new Error(`Unsupported delegation access: ${options.access}`);
+  const workerTier = options.workerTier ?? 'worker';
+  if (!['scout', 'worker', 'specialist', 'lead'].includes(workerTier)) throw new Error(`Unsupported worker tier: ${workerTier}`);
+  const attempt = options.attempt ?? 1;
+  if (!Number.isSafeInteger(attempt) || attempt < 1) throw new Error('Delegation attempt must be a positive integer.');
   if (providerDefinitions[provider].kind === 'editor-host' && options.access === 'write-worktree') {
     throw new Error(`${provider} is an interactive host and cannot own a write-capable delegation.`);
   }
@@ -185,13 +189,13 @@ export async function prepareDelegation(root, options) {
     baseRevision: context.baseRevision,
     activeSlice: managed?.state.activeSlice ?? null,
     parentTaskId: options.parentTaskId ?? null,
-    attempt: options.attempt ?? 1,
+    attempt,
     task: options.task,
     allowedPaths: context.allowedPaths,
     allowedCommands: context.allowedCommands,
     worktree: context.worktree,
     reservation: context.reservation ? { id: context.reservation.id, path: context.reservation.reservationPath } : null,
-    workerTier: options.workerTier ?? 'worker',
+    workerTier,
     model: options.model ?? null,
     reviewRequired: options.reviewRequired ?? options.access === 'write-worktree',
     timeoutSeconds: 900,
