@@ -179,3 +179,42 @@ test('rejected or stale lead review cannot be integrated', async () => {
   await assert.rejects(() => integrateDelegation(root, packet.id), /not ready to integrate/);
   await abortDelegation(root, packet.id);
 });
+
+
+test('write delegation may start with uncommitted Hafez metadata but not dirty source', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'hds-delegation-metadata-'));
+  git(root, ['init', '-q']);
+  git(root, ['config', 'user.email', 'hafez-tests@example.invalid']);
+  git(root, ['config', 'user.name', 'Hafez Tests']);
+  await writeFile(path.join(root, 'app.txt'), 'source\n');
+  git(root, ['add', 'app.txt']);
+  git(root, ['commit', '-qm', 'source fixture']);
+
+  await adoptProject(await inspectProject(root));
+
+  const packet = await prepareDelegation(root, {
+    provider: 'codex',
+    role: 'implementer',
+    task: 'Change only the application file.',
+    access: 'write-worktree',
+    allowedPaths: ['app.txt'],
+    allowedCommands: ['node --test'],
+  });
+  assert.ok(packet.worktree.path);
+  assert.equal(packet.operatingContext.autonomyMode, 'continue-until-decision');
+  assert.ok(Array.isArray(packet.operatingContext.requiredGates));
+  await abortDelegation(root, packet.id);
+
+  await writeFile(path.join(root, 'app.txt'), 'dirty source\n');
+  await assert.rejects(
+    () => prepareDelegation(root, {
+      provider: 'codex',
+      role: 'implementer',
+      task: 'Should be blocked by dirty source.',
+      access: 'write-worktree',
+      allowedPaths: ['app.txt'],
+      allowedCommands: ['node --test'],
+    }),
+    /clean integration source tree/,
+  );
+});
