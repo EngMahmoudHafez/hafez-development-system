@@ -99,6 +99,9 @@ hafez autopilot .        # same continuous mode, explicit name
 hafez autopilot-status . # show continuity, owner boundary, providers, and delegation queue
 hafez delegation-next <task-id>      # decide review/retry/escalate/integrate/owner boundary
 hafez delegation-continue <task-id>  # retire failed attempt and create the next retry/escalation packet
+hafez dispatch-plan .                 # dependency-aware plan for active-slice work units
+hafez dispatch . --execute            # start currently ready helper work
+hafez work-unit-status WU-01 --status completed
 ```
 
 `hafez run` is bounded and resumable. In plugin/skills mode the host agent performs queued planning
