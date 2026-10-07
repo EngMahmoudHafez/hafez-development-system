@@ -12,7 +12,7 @@ import { buildDispatchPlan, prepareDispatch } from './work-dispatch.mjs';
 import { activateNextRunnableSlice, completeActiveSlice, findNextRunnableSlice } from './work-units.mjs';
 import { autoDecomposeActiveSlice } from './providers.mjs';
 import { runRequiredGateRepair } from './repair.mjs';
-import { runTechnicalQuestionResolution } from './technical-actions.mjs';
+import { runTechnicalBlockerRecovery, runTechnicalQuestionResolution } from './technical-actions.mjs';
 
 const DEFAULT_MAX_STEPS = 8;
 const MAX_ALLOWED_STEPS = 100;
@@ -405,6 +405,7 @@ export async function runAutonomous(inputPath = '.', options = {}) {
   const dispatchWork = options.prepareDispatch ?? prepareDispatch;
   const repairGates = options.runRequiredGateRepair ?? runRequiredGateRepair;
   const resolveTechnicalQuestions = options.runTechnicalQuestionResolution ?? runTechnicalQuestionResolution;
+  const recoverTechnicalBlockers = options.runTechnicalBlockerRecovery ?? runTechnicalBlockerRecovery;
   const trace = [];
   let adopted = null;
 
@@ -476,6 +477,31 @@ export async function runAutonomous(inputPath = '.', options = {}) {
         } else {
           machine = { root, phase: 'resume', resume: null, managed: null, continuous: autoAdopt };
           continue;
+        }
+      } else if (execute && transition.action.id === 'resolve-technical-blockers') {
+        transition.action.autoExecuted = true;
+        transition.action.result = await recoverTechnicalBlockers(root, { maxSteps });
+        if (transition.action.result.reason === 'owner-decision-required') {
+          outcome = stop('paused', 'decision-required', {
+            questions: transition.action.result.cycle?.decision?.blockers ?? transition.action.result.ownerBlockers ?? [],
+            continuationRequired: false,
+            decisionBoundary: 'Technical recovery discovered a material project-owner decision boundary.',
+          });
+        } else if (transition.action.result.reason === 'technical-blockers-resolved' || transition.action.result.reason === 'no-technical-blockers') {
+          machine = { root, phase: 'resume', resume: null, managed: null, continuous: autoAdopt };
+          continue;
+        } else {
+          outcome = autoAdopt
+            ? stop('ready', transition.action.result.reason === 'no-lead-provider' ? 'lead-action-required' : transition.action.result.reason, {
+              continuationRequired: true,
+              decisionBoundary: null,
+              nextSafeAction: transition.action.result.reason === 'no-lead-provider'
+                ? 'No standalone lead provider is available; let the host lead resolve the technical blockers and rerun autopilot.'
+                : 'Continue technical blocker recovery from durable delegation evidence.',
+            })
+            : stop('paused', 'agent-action-required', {
+              decisionBoundary: 'A lead agent must resolve the technical blockers.',
+            });
         }
       } else if (execute && transition.action.id === 'resolve-technical-questions') {
         transition.action.autoExecuted = true;
