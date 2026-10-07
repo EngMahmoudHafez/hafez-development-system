@@ -93,6 +93,7 @@ test('CLI start alias enables durable autopilot and exposes one status view', as
   assert.equal(status.schemaVersion, 'hds-autopilot-status/v1');
   assert.equal(status.active, true);
   assert.equal(status.waitingForOwner, false);
+  assert.equal(status.ownerDecision, null);
   assert.ok(status.providers);
   assert.ok(status.delegationTopology);
   assert.ok(status.integrationQueue);

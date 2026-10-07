@@ -6,30 +6,10 @@ import { createHandoff } from './handoff.mjs';
 import { inspectProject } from './inspector.mjs';
 import { adoptProject } from './state.mjs';
 import { readJson, writeJson } from '../lib/files.mjs';
+import { isDestructiveDecision, ownerDecisionItems, requiresExternalAuthority } from './decision-policy.mjs';
 
 const DEFAULT_MAX_STEPS = 8;
 const MAX_ALLOWED_STEPS = 100;
-
-const externalAuthorityPatterns = [
-  /\bcredential(?:s)?\b/i,
-  /\bsecret(?:s)?\b/i,
-  /\bpayment\b/i,
-  /\bpublish(?:ing)?\b/i,
-  /\bproduction\b/i,
-  /\bdeploy(?:ment|ing)?\b/i,
-  /\bexternal communication\b/i,
-  /\bsend (?:an? )?(?:email|message)\b/i,
-];
-
-const destructivePatterns = [
-  /\bdelete\b/i,
-  /\bdrop (?:the )?(?:database|table|schema)\b/i,
-  /\breset --hard\b/i,
-  /\bforce[- ]push\b/i,
-  /\boverwrite\b/i,
-  /\bdestroy\b/i,
-  /\bpurge\b/i,
-];
 
 function parseMaxSteps(value) {
   if (value === undefined) return DEFAULT_MAX_STEPS;
@@ -53,6 +33,7 @@ function valueText(value) {
 function matchesAny(text, patterns) {
   return patterns.some((pattern) => pattern.test(text));
 }
+
 
 function stop(status, reason, details = {}) {
   return { status, reason, ...details };
@@ -78,10 +59,7 @@ function recordedBoundary(resume, state, project, continuous = false) {
   if (resume.blockers.length > 0) {
     const materialBlockers = resume.blockers.filter((blocker) => {
       const text = valueText(blocker);
-      return matchesAny(text, externalAuthorityPatterns)
-        || matchesAny(text, destructivePatterns)
-        || /\b(product|business|architecture) decision\b/i.test(text)
-        || /\buser-visible behavior\b/i.test(text);
+      return ownerDecisionItems([blocker]).length > 0;
     });
     if (!continuous || materialBlockers.length > 0) {
       return stop('blocked', 'blockers-present', {
@@ -113,10 +91,13 @@ function recordedBoundary(resume, state, project, continuous = false) {
   }
 
   if ((state.openQuestions ?? []).length > 0) {
-    return stop('paused', 'decision-required', {
-      questions: state.openQuestions,
-      decisionBoundary: 'The project state contains unresolved questions that require an explicit decision.',
-    });
+    const ownerQuestions = continuous ? ownerDecisionItems(state.openQuestions ?? []) : state.openQuestions;
+    if (!continuous || ownerQuestions.length > 0) {
+      return stop('paused', 'decision-required', {
+        questions: ownerQuestions,
+        decisionBoundary: 'The remaining question materially affects product behavior, architecture, external authority, or project-owner intent.',
+      });
+    }
   }
 
   return null;
@@ -124,13 +105,13 @@ function recordedBoundary(resume, state, project, continuous = false) {
 
 function authorityBoundary(resume, state) {
   const proposedAction = state.nextSafeAction || resume.nextSafeAction || '';
-  if (matchesAny(proposedAction, destructivePatterns)) {
+  if (isDestructiveDecision(proposedAction)) {
     return stop('paused', 'destructive-authority-required', {
       proposedAction,
       decisionBoundary: 'The next action appears destructive or difficult to recover.',
     });
   }
-  if (matchesAny(proposedAction, externalAuthorityPatterns)) {
+  if (requiresExternalAuthority(proposedAction)) {
     return stop('paused', 'external-authority-required', {
       proposedAction,
       decisionBoundary: 'The next action requires credentials, production authority, publishing, payment, or communication outside the project.',
@@ -207,6 +188,14 @@ function chooseAction(resume, managed, continuous = false) {
       'resolve-technical-blockers',
       'Investigate and resolve the recorded technical blockers, using scouts or debug delegation when useful.',
       'technical-recovery',
+    );
+  }
+
+  if (continuous && (state.openQuestions ?? []).length > 0) {
+    return agentAction(
+      'resolve-technical-questions',
+      'Resolve the recorded non-material technical questions from repository evidence and continue without project-owner interruption.',
+      'technical-analysis',
     );
   }
 
@@ -292,6 +281,7 @@ async function markAutopilot(root, update = {}) {
     waitingForOwner: current?.waitingForOwner ?? false,
     lastReason: current?.lastReason ?? null,
     nextSafeAction: current?.nextSafeAction ?? null,
+    ownerDecision: current?.ownerDecision ?? null,
     ...update,
   };
   await writeJson(filePath, value);
@@ -316,6 +306,7 @@ export async function runAutonomous(inputPath = '.', options = {}) {
       waitingForOwner: false,
       lastReason: 'autopilot-running',
       nextSafeAction: initialResume.nextSafeAction ?? null,
+      ownerDecision: null,
     });
   }
   const actions = [];
@@ -379,11 +370,21 @@ export async function runAutonomous(inputPath = '.', options = {}) {
       'blockers-present',
     ]);
     const waitingForOwner = ownerReasons.has(outcome.reason);
+    const ownerItems = [
+      ...(Array.isArray(outcome.questions) ? outcome.questions : []),
+      ...(Array.isArray(outcome.blockers) ? outcome.blockers : []),
+    ];
     await markAutopilot(root, {
       active: outcome.reason !== 'handoff-created',
       waitingForOwner,
       lastReason: outcome.reason,
       nextSafeAction: outcome.nextSafeAction ?? machine.resume?.nextSafeAction ?? null,
+      ownerDecision: waitingForOwner ? {
+        reason: outcome.reason,
+        boundary: outcome.decisionBoundary ?? null,
+        items: ownerItems,
+        proposedAction: outcome.proposedAction ?? null,
+      } : null,
     });
   }
 

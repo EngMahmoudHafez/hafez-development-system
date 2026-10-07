@@ -115,6 +115,7 @@ async function loadAutopilotStatus(root) {
     active: marker?.active ?? false,
     waitingForOwner: marker?.waitingForOwner ?? false,
     lastReason: marker?.lastReason ?? null,
+    ownerDecision: marker?.ownerDecision ?? null,
     nextSafeAction: marker?.nextSafeAction ?? resume.nextSafeAction,
     workflowState: resume.workflowState,
     activeSlice: resume.activeSlice,

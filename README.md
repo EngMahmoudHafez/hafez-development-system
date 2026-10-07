@@ -61,6 +61,7 @@ hafez
 
 Autopilot continuity is durable too. While a continuous run is active, `.hafez/autopilot.json`
 records whether Hafez should resume automatically or is waiting at a real project-owner boundary.
+When owner input is genuinely required it also stores the exact reason, boundary, and blocking items.
 Session-start hooks load that state so a model/session interruption does not become an artificial stop.
 
 The repository becomes the durable source of truth:
@@ -228,8 +229,10 @@ Adopted projects default to `continue-until-decision`. An agent may inspect, imp
 in-scope changes, run local gates, repair failures caused by its task, and update evidence without
 asking for routine confirmation.
 
-It pauses for a material product or architecture choice, credentials or production access, external
-publishing/payment/communication, destructive work, or a conflict it cannot resolve safely. If a run
+It resolves technical ambiguity from repository evidence and continues through retries, debugging,
+worker escalation, review, and failed gates. It pauses only for a material product/business/architecture
+choice, credentials or production access, external publishing/payment/communication, destructive work,
+or a policy conflict it cannot resolve safely. If a run
 ends because of a model limit or environment interruption, `hafez resume` reconstructs the next safe
 action from repository state.
 

@@ -1,6 +1,7 @@
 import { executeDelegationAndIngest, prepareDelegation, providerStatus } from './providers.mjs';
 import { integrateDelegation, readDelegationContext, retireDelegation } from './delegation.mjs';
 import { verifyProject } from './verifier.mjs';
+import { ownerDecisionItems } from './decision-policy.mjs';
 
 function usable(entry) {
   return entry?.installed === true && entry?.configured !== false;
@@ -43,30 +44,12 @@ export function planDelegationTopology(status = providerStatus()) {
 }
 
 
-const ownerDecisionPatterns = [
-  /\bcredential(?:s)?\b/i,
-  /\bsecret(?:s)?\b/i,
-  /\bproduction\b/i,
-  /\bdeploy(?:ment|ing)?\b/i,
-  /\bpayment\b/i,
-  /\bpublish(?:ing)?\b/i,
-  /\bexternal communication\b/i,
-  /\bproduct decision\b/i,
-  /\buser-visible behavior\b/i,
-  /\bdrop (?:the )?(?:database|table|schema)\b/i,
-  /\bforce[- ]push\b/i,
-];
-
 const tierOrder = ['scout', 'worker', 'specialist', 'lead'];
 
 function nextTier(current) {
   const index = tierOrder.indexOf(current);
   if (index < 0) return 'worker';
   return tierOrder[Math.min(index + 1, tierOrder.length - 1)];
-}
-
-function requiresOwnerDecision(blockers = []) {
-  return blockers.some((blocker) => ownerDecisionPatterns.some((pattern) => pattern.test(String(blocker))));
 }
 
 function alternativeProvider(packet, status = providerStatus()) {
@@ -91,7 +74,7 @@ export function decideDelegationContinuation(packet, result = null, review = nul
     };
   }
 
-  if (requiresOwnerDecision(result.blockers)) {
+  if (ownerDecisionItems(result.blockers).length > 0) {
     return {
       action: 'owner-decision',
       reason: 'material-authority-or-product-boundary',

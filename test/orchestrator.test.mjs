@@ -408,3 +408,22 @@ test('post-integration gate failure stays in the technical continuation loop', a
   assert.equal(cycle.verification.allPassed, false);
   assert.match(cycle.nextSafeAction, /Debug and repair/);
 });
+
+
+test('delegation owner-decision policy supports structured blockers consistently', () => {
+  const packet = { access: 'write-worktree', workerTier: 'worker', attempt: 1, reviewRequired: true };
+  const result = {
+    status: 'blocked',
+    blockers: [{
+      id: 'B-42',
+      message: 'Choose whether to preserve backward compatibility for the public API.',
+      category: 'product',
+      requiresOwner: true,
+    }],
+    verification: [],
+  };
+
+  const decision = decideDelegationContinuation(packet, result);
+  assert.equal(decision.action, 'owner-decision');
+  assert.equal(decision.ownerDecisionRequired, true);
+});
