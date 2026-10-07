@@ -179,6 +179,8 @@ export async function prepareDelegation(root, options) {
     allowedCommands: context.allowedCommands,
     worktree: context.worktree,
     reservation: context.reservation ? { id: context.reservation.id, path: context.reservation.reservationPath } : null,
+    workerTier: options.workerTier ?? 'worker',
+    reviewRequired: options.reviewRequired ?? options.access === 'write-worktree',
     timeoutSeconds: 900,
     expectedOutput: ['summary', 'evidence', 'risks', 'blockers', 'nextAction'],
   };
