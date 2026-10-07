@@ -8,6 +8,7 @@ import { adoptProject } from './state.mjs';
 import { readJson, writeJson } from '../lib/files.mjs';
 import { isDestructiveDecision, ownerDecisionItems, requiresExternalAuthority } from './decision-policy.mjs';
 import { buildDispatchPlan, prepareDispatch } from './work-dispatch.mjs';
+import { completeActiveSlice } from './work-units.mjs';
 
 const DEFAULT_MAX_STEPS = 8;
 const MAX_ALLOWED_STEPS = 100;
@@ -382,6 +383,9 @@ export async function runAutonomous(inputPath = '.', options = {}) {
       if (execute && ['preview-verification', 'verify-current-work', 'verify-completed-slice'].includes(transition.action.id)) {
         transition.action.autoExecuted = true;
         transition.action.result = await verifyProject(root);
+        if (transition.action.id === 'verify-completed-slice' && transition.action.result.allPassed) {
+          transition.action.sliceCompletion = await completeActiveSlice(root);
+        }
         machine = { root, phase: 'resume', resume: null, managed: null, continuous: autoAdopt };
         continue;
       }
