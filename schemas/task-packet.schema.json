@@ -164,6 +164,70 @@
         "null"
       ],
       "pattern": "^WU-[0-9]{2,4}$"
+    },
+    "operatingContext": {
+      "type": "object",
+      "required": [
+        "activeSlice",
+        "workUnitId",
+        "architectureProfile",
+        "autonomyMode",
+        "serializedPaths",
+        "requiredGates"
+      ],
+      "properties": {
+        "activeSlice": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "workUnitId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "architectureProfile": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "autonomyMode": {
+          "type": "string"
+        },
+        "serializedPaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "requiredGates": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "command"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "command": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "minItems": 1
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false
