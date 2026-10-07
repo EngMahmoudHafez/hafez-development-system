@@ -67,7 +67,7 @@ function requiredGateIds(project) {
   return ids;
 }
 
-function recordedBoundary(resume, state, project) {
+function recordedBoundary(resume, state, project, continuous = false) {
   if (!resume.managed) {
     return stop('paused', 'adoption-required', {
       decisionBoundary: 'Adoption writes project operating metadata and must be requested explicitly.',
@@ -75,10 +75,19 @@ function recordedBoundary(resume, state, project) {
   }
 
   if (resume.blockers.length > 0) {
-    return stop('blocked', 'blockers-present', {
-      blockers: resume.blockers,
-      decisionBoundary: 'Resolve or explicitly reclassify the recorded blocker before continuing.',
+    const materialBlockers = resume.blockers.filter((blocker) => {
+      const text = valueText(blocker);
+      return matchesAny(text, externalAuthorityPatterns)
+        || matchesAny(text, destructivePatterns)
+        || /\b(product|business|architecture) decision\b/i.test(text)
+        || /\buser-visible behavior\b/i.test(text);
     });
+    if (!continuous || materialBlockers.length > 0) {
+      return stop('blocked', 'blockers-present', {
+        blockers: continuous ? materialBlockers : resume.blockers,
+        decisionBoundary: 'A recorded blocker requires project-owner authority or a material product/architecture decision.',
+      });
+    }
   }
 
   const requiredIds = requiredGateIds(project);
@@ -89,13 +98,13 @@ function recordedBoundary(resume, state, project) {
     && gateStops.length > 0
     && gateStops.every((gate) => gate.status === 'failed');
 
-  if (resume.workflowState === 'blocked' && !retryableAfterRepair) {
+  if (resume.workflowState === 'blocked' && !retryableAfterRepair && !continuous) {
     return stop('blocked', 'workflow-blocked', {
       decisionBoundary: 'The saved workflow is blocked; record or resolve its concrete blocker before continuing.',
     });
   }
 
-  if (gateStops.length > 0 && !retryableAfterRepair) {
+  if (gateStops.length > 0 && !retryableAfterRepair && !continuous) {
     return stop('blocked', 'quality-gates-not-passed', {
       gates: gateStops,
       decisionBoundary: 'A failed, unavailable, or skipped required gate is never treated as passed.',
@@ -130,8 +139,8 @@ function authorityBoundary(resume, state) {
   return null;
 }
 
-function boundaryFor(resume, state, project) {
-  return recordedBoundary(resume, state, project) ?? authorityBoundary(resume, state);
+function boundaryFor(resume, state, project, continuous = false) {
+  return recordedBoundary(resume, state, project, continuous) ?? authorityBoundary(resume, state);
 }
 
 function commandAction(id, description, previewCommand, executeCommand = null) {
@@ -181,7 +190,7 @@ function unverifiedGateIds(project, state) {
   return requiredGateIds.filter((id) => state.gates?.[id] !== 'passed');
 }
 
-function chooseAction(resume, managed) {
+function chooseAction(resume, managed, continuous = false) {
   const { project, state } = managed;
   if (resume.staleRevision) {
     return agentAction(
@@ -191,6 +200,26 @@ function chooseAction(resume, managed) {
     );
   }
   if (resume.git.sourceDirty) return dirtyWorkAction(state, project);
+
+  if (continuous && resume.blockers.length > 0) {
+    return agentAction(
+      'resolve-technical-blockers',
+      'Investigate and resolve the recorded technical blockers, using scouts or debug delegation when useful.',
+      'technical-recovery',
+    );
+  }
+
+  const requiredIds = requiredGateIds(project);
+  const problematicGates = Object.entries(resume.gates)
+    .filter(([id, status]) => requiredIds.has(id) && ['failed', 'unavailable', 'skipped'].includes(status))
+    .map(([id, status]) => ({ id, status }));
+  if (continuous && problematicGates.length > 0) {
+    return agentAction(
+      'debug-required-gates',
+      `Diagnose and repair required gates: ${problematicGates.map((gate) => `${gate.id}=${gate.status}`).join(', ')}.`,
+      'technical-recovery',
+    );
+  }
 
   const pendingGateIds = unverifiedGateIds(project, state);
   if (pendingGateIds.length > 0 || resume.workflowState === 'verifying') {
@@ -225,13 +254,13 @@ async function resumeTransition(root) {
   return { phase: 'evaluate-boundaries', resume, managed, traceResult: resume.managed ? 'managed' : 'unmanaged' };
 }
 
-function boundaryTransition(resume, managed) {
-  const outcome = boundaryFor(resume, managed?.state ?? {}, managed?.project ?? {});
+function boundaryTransition(resume, managed, continuous) {
+  const outcome = boundaryFor(resume, managed?.state ?? {}, managed?.project ?? {}, continuous);
   return { phase: 'choose-safe-action', outcome, traceResult: outcome?.reason ?? 'clear' };
 }
 
-function actionTransition(resume, managed) {
-  const action = chooseAction(resume, managed);
+function actionTransition(resume, managed, continuous) {
+  const action = chooseAction(resume, managed, continuous);
   const outcome = stop('ready', 'action-queued', {
     nextSafeAction: action.description,
     decisionBoundary: 'The runner plans actions only; an authorized agent or user must execute the queued action.',
@@ -241,8 +270,8 @@ function actionTransition(resume, managed) {
 
 async function advanceRunner(machine) {
   if (machine.phase === 'resume') return resumeTransition(machine.root);
-  if (machine.phase === 'evaluate-boundaries') return boundaryTransition(machine.resume, machine.managed);
-  return actionTransition(machine.resume, machine.managed);
+  if (machine.phase === 'evaluate-boundaries') return boundaryTransition(machine.resume, machine.managed, machine.continuous);
+  return actionTransition(machine.resume, machine.managed, machine.continuous);
 }
 
 /**
@@ -264,7 +293,7 @@ export async function runAutonomous(inputPath = '.', options = {}) {
     }
   }
   const actions = [];
-  let machine = { root, phase: 'resume', resume: null, managed: null };
+  let machine = { root, phase: 'resume', resume: null, managed: null, continuous: autoAdopt };
   let outcome = null;
 
   while (trace.length < maxSteps && !outcome) {
@@ -275,7 +304,7 @@ export async function runAutonomous(inputPath = '.', options = {}) {
       if (execute && ['preview-verification', 'verify-current-work'].includes(transition.action.id)) {
         transition.action.autoExecuted = true;
         transition.action.result = await verifyProject(root);
-        machine = { root, phase: 'resume', resume: null, managed: null };
+        machine = { root, phase: 'resume', resume: null, managed: null, continuous: autoAdopt };
         continue;
       }
       if (execute && transition.action.id === 'create-handoff') {
@@ -285,10 +314,16 @@ export async function runAutonomous(inputPath = '.', options = {}) {
           nextSafeAction: transition.action.result.nextSafeAction,
         });
       } else if (execute && transition.action.kind === 'agent-task') {
-        outcome = stop('paused', 'agent-action-required', {
-          nextSafeAction: transition.action.description,
-          decisionBoundary: 'A host agent must execute this bounded code or planning task, then rerun Hafez.',
-        });
+        outcome = autoAdopt
+          ? stop('ready', 'lead-action-required', {
+            nextSafeAction: transition.action.description,
+            continuationRequired: true,
+            decisionBoundary: null,
+          })
+          : stop('paused', 'agent-action-required', {
+            nextSafeAction: transition.action.description,
+            decisionBoundary: 'A host agent must execute this bounded code or planning task, then rerun Hafez.',
+          });
       } else {
         outcome = transition.outcome ?? null;
       }
@@ -299,9 +334,15 @@ export async function runAutonomous(inputPath = '.', options = {}) {
   }
 
   if (!outcome) {
-    outcome = stop('paused', 'max-steps-reached', {
-      decisionBoundary: `The bounded run reached its ${maxSteps}-step limit.`,
-    });
+    outcome = autoAdopt
+      ? stop('ready', 'continuation-budget-reached', {
+        continuationRequired: true,
+        decisionBoundary: null,
+        nextSafeAction: 'Continue the autopilot loop from durable Hafez state.',
+      })
+      : stop('paused', 'max-steps-reached', {
+        decisionBoundary: `The bounded run reached its ${maxSteps}-step limit.`,
+      });
   }
 
   return {
