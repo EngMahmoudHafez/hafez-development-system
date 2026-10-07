@@ -5,6 +5,7 @@ import { readJson } from '../lib/files.mjs';
 const schemaDirectory = fileURLToPath(new URL('../../schemas/', import.meta.url));
 
 const schemaFiles = {
+  autopilot: 'autopilot.schema.json',
   capabilities: 'capabilities.schema.json',
   'delegation-result': 'delegation-result.schema.json',
   project: 'project.schema.json',
@@ -135,7 +136,7 @@ function validateNode(value, schema, instancePath, errors, rootSchema) {
 }
 
 export function documentType(document) {
-  const match = /^hds-(project|state|capabilities|task-packet|workspace|delegation-result|writer-reservation)\/v\d+$/.exec(document?.schemaVersion ?? '');
+  const match = /^hds-(project|state|capabilities|task-packet|workspace|delegation-result|writer-reservation|autopilot)\/v\d+$/.exec(document?.schemaVersion ?? '');
   return match?.[1] ?? null;
 }
 
