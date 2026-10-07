@@ -402,6 +402,7 @@ export async function runAutonomous(inputPath = '.', options = {}) {
   const execute = options.execute === true;
   const autoAdopt = options.autoAdopt === true;
   const dispatchWork = options.prepareDispatch ?? prepareDispatch;
+  const repairGates = options.runRequiredGateRepair ?? runRequiredGateRepair;
   const trace = [];
   let adopted = null;
 
@@ -471,7 +472,7 @@ export async function runAutonomous(inputPath = '.', options = {}) {
         }
       } else if (execute && transition.action.id === 'debug-required-gates') {
         transition.action.autoExecuted = true;
-        transition.action.result = await runRequiredGateRepair(root, { maxSteps });
+        transition.action.result = await repairGates(root, { maxSteps });
         if (transition.action.result.reason === 'owner-decision-required') {
           outcome = stop('paused', 'decision-required', {
             questions: transition.action.result.cycle?.decision?.blockers ?? [],
