@@ -97,7 +97,9 @@ test('dispatch plan respects dependencies, lead ownership, scout routing, and on
   assert.equal(writer.dispatch.action, 'wait');
   assert.equal(writer.dispatch.reason, 'dependencies-incomplete');
   assert.deepEqual(writer.incompleteDependencies, ['WU-01']);
-  assert.equal(lead.dispatch.action, 'lead');
+  assert.equal(lead.dispatch.action, 'delegate');
+  assert.equal(lead.dispatch.provider, 'codex');
+  assert.equal(lead.dispatch.reason, 'standalone-lead-provider-available');
 
   const slice = JSON.parse(await readFile(fixture.slicePath, 'utf8'));
   slice.workUnits[0].status = 'completed';
@@ -248,4 +250,31 @@ test('active work units are never dispatched a second time', async () => {
   const plan = await buildDispatchPlan(fixture.root, { providerStatus: providers });
   assert.equal(plan.units[0].dispatch.action, 'wait');
   assert.equal(plan.units[0].dispatch.reason, 'unit-already-active');
+});
+
+
+test('lead-owned work falls back to the host when no standalone lead provider is available', async () => {
+  const fixture = await sliceFixture([
+    unit({
+      id: 'WU-01',
+      objective: 'Perform architecture-sensitive analysis.',
+      role: 'lead',
+      workerTier: 'lead',
+      access: 'read-only',
+      parallelSafe: false,
+      acceptanceCriteria: ['Lead analysis is complete.'],
+    }),
+  ]);
+
+  const plan = await buildDispatchPlan(fixture.root, {
+    providerStatus: {
+      codex: { installed: false, configured: false, kind: 'agent-cli' },
+      claude: { installed: false, configured: false, kind: 'agent-cli' },
+      gemini: { installed: false, configured: false, kind: 'agent-cli' },
+    },
+  });
+
+  assert.equal(plan.units[0].dispatch.action, 'lead');
+  assert.equal(plan.units[0].dispatch.provider, null);
+  assert.equal(plan.units[0].dispatch.reason, 'host-lead-required');
 });
