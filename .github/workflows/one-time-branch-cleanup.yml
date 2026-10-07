@@ -1,0 +1,49 @@
+name: One-time merged branch cleanup
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    if: contains(github.event.head_commit.message, '[cleanup-merged-branches]')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Delete retired feature branches
+        shell: bash
+        run: |
+          set -euo pipefail
+          branches=(
+            "feat/automatic-technical-repair"
+            "feat/automatic-work-dispatch"
+            "feat/autopilot-anti-stall"
+            "feat/autopilot-operational-polish"
+            "feat/continuous-agent-loop"
+            "feat/continuous-autopilot-loop"
+            "feat/continuous-decision-loop"
+            "feat/core-engineering-skills"
+            "feat/delegation-attempt-memory"
+            "feat/durable-work-unit-graph"
+            "feat/parallel-scout-dispatch"
+            "feat/repair-workgraph-hardening"
+            "feat/standalone-lead-dispatch"
+            "feat/standalone-lead-loop"
+            "feat/standalone-technical-actions"
+            "test/real-lifecycle-hardening"
+          )
+
+          for branch in "${branches[@]}"; do
+            if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
+              echo "Deleting $branch"
+              git push origin --delete "$branch"
+            else
+              echo "Already absent: $branch"
+            fi
+          done
